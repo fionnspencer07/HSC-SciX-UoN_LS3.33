@@ -31,4 +31,8 @@ library(dplyr)
 library(tidyr)
 library(ggplot2)
 library(RColorBrewer)
+library(DESeq2)
+library(edgeR)
+library(edge)
+
 

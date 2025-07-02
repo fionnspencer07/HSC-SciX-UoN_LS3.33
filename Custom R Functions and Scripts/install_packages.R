@@ -24,6 +24,9 @@ BiocManager::install("scrapper", dependencies = TRUE)
 BiocManager::install("dittoSeq", dependencies = TRUE)
 BiocManager::install("NeuCA", dependencies = TRUE)
 BiocManager::install("ComplexHeatmap", dependencies = TRUE)
+BiocManager::install("edge", dependencies = TRUE)
+BiocManager::install("edgeR", dependencies = TRUE)
+BiocManager::install("DESeq2", dependencies = TRUE)
 
 # GitHub package
 install.packages("devtools", dependencies = TRUE)
