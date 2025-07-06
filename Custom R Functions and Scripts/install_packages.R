@@ -1,5 +1,6 @@
-install.packages("tidyverse", dependencies = TRUE)
+install.packages("devtools", dependencies = TRUE)
 # CRAN packages
+install.packages("tidyverse", dependencies = TRUE)
 install.packages("here", dependencies = TRUE)
 install.packages("hdf5r", dependencies = TRUE)
 install.packages("cowplot", dependencies = TRUE)
@@ -37,6 +38,3 @@ remotes::install_github("immunogenomics/presto", dependencies = TRUE)
 
 # Seurat (CRAN)
 install.packages("Seurat", dependencies = TRUE)
-
-
-renv::install.packages("presto")
