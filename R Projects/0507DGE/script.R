@@ -12,3 +12,6 @@ seu <- readRDS("/workspaces/HSC-SciX-UoN_LS3.33/Data/seu_NKT_blood_mouse_PPK_ONC
 
 ## NK, T Cells
 seu_NKT <- subset(seu, subset = cell_types %in% c("T_cells", "NK_cells", "NKT_cells"))
+
+## NK, T Cells - No Treatment [Excluding these Conditions (ONC201), (Dexmethasone), (ONC201 & Dexmethasone)]
+seu_NKT_focused <- subset(seu_NKT, subset = treatment %in% c("UT", "Naive", "Sham"))
