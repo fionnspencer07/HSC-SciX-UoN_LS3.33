@@ -33,7 +33,6 @@ BiocManager::install("DESeq2", dependencies = TRUE)
 install.packages("devtools", dependencies = TRUE)
 devtools::install_github("immunogenomics/presto", dependencies = TRUE)
 remotes::install_github("nx10/httpgd", dependencies = TRUE)
-remotes::install_github("immunogenomics/presto", dependencies = TRUE)
 
 
 # Seurat (CRAN)
