@@ -6,3 +6,4 @@ man_cols <- c("#86b0cc",  "#f3e65d", "#d5c1e7", "#eeb84c", "#82c39e", "#525252",
 names(man_cols) <- c("B_cells", "NK_cells", "monocytes", "T_cells", "neutrophils", "megakaryocytes", "pDCs",
                      "plasma_cells", "progenitor_cells", "NKT_cells")
 
+seu <- readRDS("/workspaces/HSC-SciX-UoN_LS3.33/Data/seu_NKT_blood_mouse_PPK_ONC_harmony_integrated_filtered_v2_20231_20236_annot.rds")
