@@ -1,10 +1,9 @@
 {
-  "name": "Rocker RStudio Codespace",
-  "image": "rocker/verse:latest",
-  "remoteUser": "rstudio",
+  "name": "Rocker RStudio Server",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
   "forwardPorts": [8787],
-  "postCreateCommand": "R -e 'install.packages(c(\"tidyverse\", \"here\"))'",
-  "settings": {
-    "terminal.integrated.shell.linux": "/bin/bash"
-  }
+  "remoteUser": "rstudio",
+  "postCreateCommand": "echo 'RStudio Server is ready at port 8787. Login: rstudio / rstudio'"
 }
