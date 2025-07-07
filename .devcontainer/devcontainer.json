@@ -1,0 +1,15 @@
+{
+    "name": "RStudio Codespace",
+    "image": "rocker/rstudio:latest", // Or a specific version like "rocker/rstudio:4.3.2"
+    "forwardPorts": [8787],
+    "postCreateCommand": "R -e \"install.packages(c('tidyverse', 'devtools'), repos='https://cran.rstudio.com/')\"",
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "reditorsupport.r",
+                "rdebugger.r-debugger"
+            ]
+        }
+    },
+    "remoteUser": "fionnspencer07" // Important: RStudio's default user
+}
