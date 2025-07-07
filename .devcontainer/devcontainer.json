@@ -1,0 +1,10 @@
+{
+  "name": "Rocker RStudio Codespace",
+  "image": "rocker/verse:latest",
+  "remoteUser": "rstudio",
+  "forwardPorts": [8787],
+  "postCreateCommand": "R -e 'install.packages(c(\"tidyverse\", \"here\"))'",
+  "settings": {
+    "terminal.integrated.shell.linux": "/bin/bash"
+  }
+}
