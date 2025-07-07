@@ -1,0 +1,11 @@
+{
+  "name": "R Development Environment",
+  "image": "rocker/rstudio:latest",
+  "forwardPorts": [8787],
+  "portsAttributes": {
+    "8787": {
+      "label": "RStudio Server",
+      "onAutoForward": "openBrowser"
+    }
+  }
+}
