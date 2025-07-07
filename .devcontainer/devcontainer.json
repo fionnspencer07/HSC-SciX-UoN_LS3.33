@@ -1,9 +1,0 @@
-{
-  "name": "Rocker RStudio Server",
-  "build": {
-    "dockerfile": "Dockerfile"
-  },
-  "forwardPorts": [8787],
-  "remoteUser": "rstudio",
-  "postCreateCommand": "echo 'RStudio Server is ready at port 8787. Login: rstudio / rstudio'"
-}
