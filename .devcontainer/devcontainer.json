@@ -1,15 +1,21 @@
 {
-    "name": "RStudio Codespace",
-    "image": "rocker/rstudio:latest", // Or a specific version like "rocker/rstudio:4.3.2"
-    "forwardPorts": [8787],
-    "postCreateCommand": "R -e \"install.packages(c('tidyverse', 'devtools'), repos='https://cran.rstudio.com/')\"",
-    "customizations": {
-        "vscode": {
-            "extensions": [
-                "reditorsupport.r",
-                "rdebugger.r-debugger"
-            ]
-        }
-    },
-    "remoteUser": "fionnspencer07" // Important: RStudio's default user
+	"name": "Combination of r-rig and rstudio-server",
+	"image": "mcr.microsoft.com/devcontainers/base:ubuntu",
+	"features": {
+		"ghcr.io/rocker-org/devcontainer-features/r-rig:1": {
+			"version": "release"
+		},
+		"ghcr.io/rocker-org/devcontainer-features/rstudio-server:0": {}
+	},
+	"postAttachCommand": {
+		"rstudio-start": "rserver"
+	},
+	"forwardPorts": [
+		8787
+	],
+	"portsAttributes": {
+		"8787": {
+			"label": "RStudio IDE"
+		}
+	}
 }
