@@ -1,3 +1,4 @@
+library(here)
 #init packages
 source(here("Custom R Functions and Scripts", "init_packages.R"))  # will only work if the rproj opened is HSC SciX UoN LS3.33
 
