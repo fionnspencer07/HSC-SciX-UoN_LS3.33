@@ -38,4 +38,5 @@ library(DT)
 library(patchwork)
 library(muscat)
 library(scater)
-
+library(EnhancedVolcano)
+library(Rvisdiff)
