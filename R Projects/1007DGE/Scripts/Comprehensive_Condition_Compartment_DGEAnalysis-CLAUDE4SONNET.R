@@ -451,10 +451,10 @@ for(compartment in c("WB", "BM")) {
 }
 
 # ============================================================================
-# 4. GENES OF INTEREST ANALYSIS
+# 4. GENES OF INTEREST ANALYSIS (FIXED FOR MUSCAT)
 # ============================================================================
 
-print("\n=== 4. GENES OF INTEREST ANALYSIS ===")
+print("\n=== 4. GENES OF INTEREST ANALYSIS (FIXED FOR MUSCAT) ===")
 
 # Your genes of interest
 s1pr_genes <- c("S1pr1", "S1pr2", "S1pr3", "S1pr4", "S1pr5")
@@ -467,38 +467,99 @@ all_goi <- unique(c(s1pr_genes, trafficking_genes, retention_genes, egress_genes
 print("Genes of interest:")
 print(all_goi)
 
-# Extract GOI from all results
+# First, let's check what results we have
+print("\nAll results available:")
+print(names(all_results))
+
+# Separate analysis by method type
+print("\nAnalyzing results by method...")
+
+# Extract GOI from all results with proper handling for different result types
 goi_all_results <- list()
 goi_summary <- data.frame()
 
 for(result_name in names(all_results)) {
   result_df <- all_results[[result_name]]
   
-  # Handle different gene column names
-  if("gene" %in% colnames(result_df)) {
-    goi_subset <- result_df[result_df$gene %in% all_goi, ]
+  print(paste("Processing:", result_name))
+  print(paste("  Columns:", paste(colnames(result_df)[1:min(10, ncol(result_df))], collapse = ", ")))
+  print(paste("  Rows:", nrow(result_df)))
+  
+  # Handle different result types
+  if(grepl("muscat", result_name)) {
+    print("  -> This is a muscat result")
+    
+    # For muscat results, gene names are in the 'gene' column
+    if("gene" %in% colnames(result_df)) {
+      goi_subset <- result_df[result_df$gene %in% all_goi, ]
+      print(paste("  -> Found", nrow(goi_subset), "GOI in muscat results"))
+    } else {
+      print("  -> No 'gene' column found in muscat results")
+      print(paste("  -> Available columns:", paste(colnames(result_df), collapse = ", ")))
+      goi_subset <- data.frame() # Empty if no gene column
+    }
+    
   } else {
-    goi_subset <- result_df[rownames(result_df) %in% all_goi, ]
-    goi_subset$gene <- rownames(goi_subset)
+    print("  -> This is a Wilcoxon result")
+    
+    # For Wilcoxon results, gene names are in rownames or 'gene' column
+    if("gene" %in% colnames(result_df)) {
+      goi_subset <- result_df[result_df$gene %in% all_goi, ]
+    } else {
+      # Gene names are in rownames
+      goi_subset <- result_df[rownames(result_df) %in% all_goi, ]
+      if(nrow(goi_subset) > 0) {
+        goi_subset$gene <- rownames(goi_subset)
+      }
+    }
+    print(paste("  -> Found", nrow(goi_subset), "GOI in Wilcoxon results"))
   }
   
+  # Store if we found any GOI
   if(nrow(goi_subset) > 0) {
+    # Add result source info
+    goi_subset$result_source <- result_name
     goi_all_results[[result_name]] <- goi_subset
+    
+    # Add to summary
     goi_summary <- rbind(goi_summary, goi_subset)
+    print(paste("  -> Added to summary, total GOI now:", nrow(goi_summary)))
   }
 }
 
-print("GOI results summary:")
+# Check what we got
+print("\n=== GOI EXTRACTION SUMMARY ===")
+print(paste("Total GOI results:", nrow(goi_summary)))
+
 if(nrow(goi_summary) > 0) {
   print("GOI by gene:")
-  print(table(goi_summary$gene))
+  print(sort(table(goi_summary$gene), decreasing = TRUE))
+  
+  print("GOI by method:")
+  if("method" %in% colnames(goi_summary)) {
+    print(table(goi_summary$method))
+  }
   
   print("GOI by comparison type:")
-  print(table(goi_summary$comparison_type))
+  if("comparison_type" %in% colnames(goi_summary)) {
+    print(table(goi_summary$comparison_type))
+  }
   
-  if("cell_type" %in% colnames(goi_summary)) {
-    print("GOI by cell type:")
-    print(table(goi_summary$cell_type))
+  print("GOI by result source:")
+  if("result_source" %in% colnames(goi_summary)) {
+    print(table(goi_summary$result_source))
+  }
+  
+  # Show what muscat results we have
+  muscat_goi <- goi_summary[grepl("muscat", goi_summary$result_source), ]
+  print(paste("Muscat GOI results:", nrow(muscat_goi)))
+  
+  if(nrow(muscat_goi) > 0) {
+    print("Muscat GOI by gene:")
+    print(table(muscat_goi$gene))
+    
+    print("Sample of muscat GOI results:")
+    print(head(muscat_goi[, c("gene", "result_source", if("logFC" %in% colnames(muscat_goi)) "logFC" else "avg_log2FC")]))
   }
   
   # Show significant results
@@ -511,14 +572,113 @@ if(nrow(goi_summary) > 0) {
   
   if(!is.na(pval_col)) {
     sig_results <- goi_summary[goi_summary[[pval_col]] < 0.05, ]
+    print(paste("Significant GOI results (p < 0.05):", nrow(sig_results)))
+    
     if(nrow(sig_results) > 0) {
-      print("Significant GOI results:")
-      print(sig_results[, c("gene", "comparison_type", if("cell_type" %in% colnames(sig_results)) "cell_type" else NULL)])
+      print("Significant GOI by method:")
+      if("method" %in% colnames(sig_results)) {
+        print(table(sig_results$method))
+      }
+      
+      print("Top significant GOI results:")
+      sig_display <- sig_results[order(sig_results[[pval_col]]), ]
+      print(head(sig_display[, c("gene", "result_source", if("logFC" %in% colnames(sig_display)) "logFC" else "avg_log2FC", pval_col)]))
     }
   }
 } else {
   print("No genes of interest found in results")
+  
+  # Debug: Check if muscat results exist but have different structure
+  print("\nDEBUG: Checking muscat results structure...")
+  muscat_results <- all_results[grepl("muscat", names(all_results))]
+  
+  for(muscat_name in names(muscat_results)) {
+    print(paste("Muscat result:", muscat_name))
+    muscat_df <- muscat_results[[muscat_name]]
+    print(paste("  Columns:", paste(colnames(muscat_df), collapse = ", ")))
+    print(paste("  First few rows:"))
+    print(head(muscat_df, 3))
+  }
 }
+
+# ============================================================================
+# SAVE FIXED GOI RESULTS
+# ============================================================================
+
+print("\n=== SAVING FIXED GOI RESULTS ===")
+
+# Save GOI results
+saveRDS(goi_all_results, here("R Projects", "1007DGE", "Comprehensive_Condition_Compartment_DGEAnalysis-CLAUDE4SONNET", "comprehensive_GOI_results_FIXED.rds"))
+
+if(nrow(goi_summary) > 0) {
+  write.csv(goi_summary, here("R Projects", "1007DGE", "Comprehensive_Condition_Compartment_DGEAnalysis-CLAUDE4SONNET", "comprehensive_GOI_summary_FIXED.csv"), row.names = FALSE)
+  
+  # Also save separate files for each method
+  wilcox_goi <- goi_summary[!grepl("muscat", goi_summary$result_source), ]
+  muscat_goi <- goi_summary[grepl("muscat", goi_summary$result_source), ]
+  
+  if(nrow(wilcox_goi) > 0) {
+    write.csv(wilcox_goi, here("R Projects", "1007DGE", "Comprehensive_Condition_Compartment_DGEAnalysis-CLAUDE4SONNET", "GOI_Wilcoxon_results.csv"), row.names = FALSE)
+  }
+  
+  if(nrow(muscat_goi) > 0) {
+    write.csv(muscat_goi, here("R Projects", "1007DGE", "Comprehensive_Condition_Compartment_DGEAnalysis-CLAUDE4SONNET", "GOI_Muscat_results.csv"), row.names = FALSE)
+  }
+  
+  print("Generated files:")
+  print("- comprehensive_GOI_summary_FIXED.csv (all methods)")
+  print("- GOI_Wilcoxon_results.csv (Wilcoxon only)")
+  print("- GOI_Muscat_results.csv (muscat only)")
+  print("- comprehensive_GOI_results_FIXED.rds (all results object)")
+  
+} else {
+  print("No GOI results to save")
+}
+
+# ============================================================================
+# ALSO CHECK RAW MUSCAT RESULTS FOR GOI
+# ============================================================================
+
+print("\n=== CHECKING RAW MUSCAT RESULTS FOR GOI ===")
+
+# Check the raw muscat results that were generated
+if(exists("muscat_comp_edgeR_res")) {
+  print("Checking muscat_comp_edgeR_res for GOI...")
+  print(paste("Total muscat edgeR results:", nrow(muscat_comp_edgeR_res)))
+  
+  if("gene" %in% colnames(muscat_comp_edgeR_res)) {
+    edgeR_goi <- muscat_comp_edgeR_res[muscat_comp_edgeR_res$gene %in% all_goi, ]
+    print(paste("GOI in edgeR results:", nrow(edgeR_goi)))
+    
+    if(nrow(edgeR_goi) > 0) {
+      print("edgeR GOI:")
+      print(edgeR_goi[, c("gene", "cluster_id", "logFC", "p_adj.loc")])
+      
+      # Save this separately
+      write.csv(edgeR_goi, here("R Projects", "1007DGE", "Comprehensive_Condition_Compartment_DGEAnalysis-CLAUDE4SONNET", "GOI_muscat_edgeR_direct.csv"), row.names = FALSE)
+    }
+  }
+}
+
+if(exists("muscat_comp_DESeq2_res")) {
+  print("Checking muscat_comp_DESeq2_res for GOI...")
+  print(paste("Total muscat DESeq2 results:", nrow(muscat_comp_DESeq2_res)))
+  
+  if("gene" %in% colnames(muscat_comp_DESeq2_res)) {
+    deseq2_goi <- muscat_comp_DESeq2_res[muscat_comp_DESeq2_res$gene %in% all_goi, ]
+    print(paste("GOI in DESeq2 results:", nrow(deseq2_goi)))
+    
+    if(nrow(deseq2_goi) > 0) {
+      print("DESeq2 GOI:")
+      print(deseq2_goi[, c("gene", "cluster_id", "logFC", "p_adj.loc")])
+      
+      # Save this separately
+      write.csv(deseq2_goi, here("R Projects", "1007DGE", "Comprehensive_Condition_Compartment_DGEAnalysis-CLAUDE4SONNET", "GOI_muscat_DESeq2_direct.csv"), row.names = FALSE)
+    }
+  }
+}
+
+print("=== GOI ANALYSIS COMPLETE ===")
 
 # ============================================================================
 # 5. COMPREHENSIVE VISUALIZATION
@@ -560,7 +720,7 @@ for(gene in all_goi[all_goi %in% rownames(seu_NKT_focused)]) {
     # Combine all plots
     combined_plot <- (p1 / p2 / p3)
     
-    ggsave(here("R Projects", "1007DGE", "claude4results", paste0(gene, "_comprehensive_expression.pdf")), 
+    ggsave(here("R Projects", "1007DGE", "Comprehensive_Condition_Compartment_DGEAnalysis-CLAUDE4SONNET", paste0(gene, "_comprehensive_expression.pdf")), 
            combined_plot, width = 20, height = 18)
   }, error = function(e) {
     print(paste("Error creating plot for", gene, ":", e$message))
@@ -612,7 +772,7 @@ if(nrow(goi_summary) > 0) {
              y = "Gene")
       
       print(p_comprehensive_heatmap)
-      ggsave(here("R Projects", "1007DGE", "claude4results", "comprehensive_GOI_heatmap.pdf"), 
+      ggsave(here("R Projects", "1007DGE", "Comprehensive_Condition_Compartment_DGEAnalysis-CLAUDE4SONNET", "comprehensive_GOI_heatmap.pdf"), 
              p_comprehensive_heatmap, width = 24, height = 16)
     }
   }, error = function(e) {
@@ -627,39 +787,33 @@ if(nrow(goi_summary) > 0) {
 print("\n=== 6. SAVING COMPREHENSIVE RESULTS ===")
 
 # Save all results
-saveRDS(all_results, here("R Projects", "1007DGE", "claude4results", "comprehensive_all_results.rds"))
-
-# Save GOI results
-saveRDS(goi_all_results, here("R Projects", "1007DGE", "claude4results", "comprehensive_GOI_results.rds"))
-if(nrow(goi_summary) > 0) {
-  write.csv(goi_summary, here("R Projects", "1007DGE", "claude4results", "comprehensive_GOI_summary.csv"), row.names = FALSE)
-}
+saveRDS(all_results, here("R Projects", "1007DGE", "Comprehensive_Condition_Compartment_DGEAnalysis-CLAUDE4SONNET", "comprehensive_all_results.rds"))
 
 # Save results by comparison type
 compartment_results <- all_results[grepl("Compartment|muscat_compartment", names(all_results))]
 condition_results <- all_results[grepl("Condition|muscat_condition", names(all_results))]
 
-saveRDS(compartment_results, here("R Projects", "1007DGE", "claude4results", "compartment_comparison_results.rds"))
-saveRDS(condition_results, here("R Projects", "1007DGE", "claude4results", "condition_comparison_results.rds"))
+saveRDS(compartment_results, here("R Projects", "1007DGE", "Comprehensive_Condition_Compartment_DGEAnalysis-CLAUDE4SONNET", "compartment_comparison_results.rds"))
+saveRDS(condition_results, here("R Projects", "1007DGE", "Comprehensive_Condition_Compartment_DGEAnalysis-CLAUDE4SONNET", "condition_comparison_results.rds"))
 
 # Create comprehensive CSV files
 if(length(compartment_results) > 0) {
   compartment_combined <- do.call(rbind, compartment_results)
-  write.csv(compartment_combined, here("R Projects", "1007DGE", "claude4results", "all_compartment_results.csv"), row.names = FALSE)
+  write.csv(compartment_combined, here("R Projects", "1007DGE", "Comprehensive_Condition_Compartment_DGEAnalysis-CLAUDE4SONNET", "all_compartment_results.csv"), row.names = FALSE)
 }
 
 if(length(condition_results) > 0) {
   condition_combined <- do.call(rbind, condition_results)
-  write.csv(condition_combined, here("R Projects", "1007DGE", "claude4results", "all_condition_results.csv"), row.names = FALSE)
+  write.csv(condition_combined, here("R Projects", "1007DGE", "Comprehensive_Condition_Compartment_DGEAnalysis-CLAUDE4SONNET", "all_condition_results.csv"), row.names = FALSE)
 }
 
 # Save individual muscat results
 tryCatch({
   if(exists("muscat_comp_edgeR_res")) {
-    write.csv(muscat_comp_edgeR_res, here("R Projects", "1007DGE", "claude4results", "muscat_compartment_edgeR.csv"), row.names = FALSE)
+    write.csv(muscat_comp_edgeR_res, here("R Projects", "1007DGE", "Comprehensive_Condition_Compartment_DGEAnalysis-CLAUDE4SONNET", "muscat_compartment_edgeR.csv"), row.names = FALSE)
   }
   if(exists("muscat_comp_DESeq2_res")) {
-    write.csv(muscat_comp_DESeq2_res, here("R Projects", "1007DGE", "claude4results", "muscat_compartment_DESeq2.csv"), row.names = FALSE)
+    write.csv(muscat_comp_DESeq2_res, here("R Projects", "1007DGE", "Comprehensive_Condition_Compartment_DGEAnalysis-CLAUDE4SONNET", "muscat_compartment_DESeq2.csv"), row.names = FALSE)
   }
 }, error = function(e) {
   print(paste("Error saving individual muscat results:", e$message))
@@ -670,9 +824,13 @@ tryCatch({
 # ============================================================================
 
 print("\n=== COMPREHENSIVE ANALYSIS COMPLETE ===")
-print("Generated files in R Projects/1007DGE/claude4results/:")
+print("Generated files in R Projects/1007DGE/Comprehensive_Condition_Compartment_DGEAnalysis-CLAUDE4SONNET/:")
 print("- comprehensive_all_results.rds (all analysis results)")
-print("- comprehensive_GOI_summary.csv (genes of interest)")
+print("- comprehensive_GOI_summary_FIXED.csv (genes of interest - all methods)")
+print("- GOI_Wilcoxon_results.csv (GOI - Wilcoxon only)")
+print("- GOI_Muscat_results.csv (GOI - muscat only)")
+print("- GOI_muscat_edgeR_direct.csv (GOI - direct from muscat edgeR)")
+print("- GOI_muscat_DESeq2_direct.csv (GOI - direct from muscat DESeq2)")
 print("- comprehensive_GOI_heatmap.pdf (overview visualization)")
 print("- compartment_comparison_results.rds (WB vs BM analyses)")
 print("- condition_comparison_results.rds (treatment comparisons)")
@@ -716,7 +874,11 @@ if(nrow(goi_summary) > 0) {
     print("GOI distribution by comparison type:")
     print(table(goi_summary$comparison_type))
   }
+  
+  if("method" %in% colnames(goi_summary)) {
+    print("GOI distribution by method:")
+    print(table(goi_summary$method))
+  }
 }
 
 print("\n=== ANALYSIS FRAMEWORK COMPLETED SUCCESSFULLY ===")
-
