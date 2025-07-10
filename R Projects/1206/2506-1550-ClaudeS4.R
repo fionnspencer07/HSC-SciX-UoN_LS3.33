@@ -1,6 +1,7 @@
 # Focused analysis for Question 2: S1PR and lymphocyte trafficking in DMG
 
-source("/workspaces/HSC-SciX-UoN_LS3.33/Custom R Functions and Scripts/init_packages.R")
+source(here("Custom R Functions and Scripts", "install_packages.R"))
+source(here("Custom R Functions and Scripts", "init_packages.R"))
 
 source("/workspaces/HSC-SciX-UoN_LS3.33/Custom R Functions and Scripts/install_packages.R")
 # Custom colors
@@ -8,7 +9,7 @@ man_cols <- c("#86b0cc",  "#f3e65d", "#d5c1e7", "#eeb84c", "#82c39e", "#525252",
 names(man_cols) <- c("B_cells", "NK_cells", "monocytes", "T_cells", "neutrophils", "megakaryocytes", "pDCs", "plasma_cells", "progenitor_cells", "NKT_cells")
 
 # Load data
-seu <- readRDS("/workspaces/HSC-SciX-UoN_LS3.33/Data/seu_NKT_blood_mouse_PPK_ONC_harmony_integrated_filtered_v2_20231_20236_annot.rds")
+seu <- readRDS(here("Data", "seu_NKT_blood_mouse_PPK_ONC_harmony_integrated_filtered_v2_20231_20236_annot.rds"))
 seu_NKT <- subset(seu, subset = cell_types %in% c("T_cells", "NK_cells", "NKT_cells"))
 
 # FOCUSED ANALYSIS: Only Naive, Sham, UT conditions
