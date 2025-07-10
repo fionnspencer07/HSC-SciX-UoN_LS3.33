@@ -32,6 +32,7 @@ BiocManager::install("Nebulosa", dependencies = TRUE)
 BiocManager::install("scClassify", dependencies = TRUE)
 BiocManager::install("RColorBrewer", dependencies = TRUE)
 BiocManager::install("muscat", dependencies = TRUE)
+BiocManager::install("scater", dependencies = TRUE)
 
 # GitHub package
 install.packages("devtools", dependencies = TRUE)
