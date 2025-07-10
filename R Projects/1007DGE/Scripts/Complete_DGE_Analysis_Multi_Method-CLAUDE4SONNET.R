@@ -26,8 +26,8 @@ print(table(seu_NKT_focused$sample_id, seu_NKT_focused$treatment))
 DefaultAssay(seu_NKT_focused) <- "RNA"
 
 # Create results directory
-if(!dir.exists(here("Results"))) {
-  dir.create(here("Results"))
+if(!dir.exists(here("R Projects", "1007DGE", "claude4results"))) {
+  dir.create(here("R Projects", "1007DGE", "claude4results"))
 }
 
 # ============================================================================
