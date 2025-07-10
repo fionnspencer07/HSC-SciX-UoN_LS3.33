@@ -26,8 +26,8 @@ seu_NKT_focused <- subset(seu_NKT, subset = treatment %in% c("UT", "NAIVE", "SHA
 print("=== COMPREHENSIVE CONDITION-COMPARTMENT ANALYSIS ===")
 
 # Create results directory with your specified path
-if(!dir.exists(here("R Projects", "1007DGE", "claude4results"))) {
-  dir.create(here("R Projects", "1007DGE", "claude4results"), recursive = TRUE)
+if(!dir.exists(here("R Projects", "1007DGE", "Comprehensive_Condition_Compartment_DGEAnalysis-CLAUDE4SONNET"))) {
+  dir.create(here("R Projects", "1007DGE", "Comprehensive_Condition_Compartment_DGEAnalysis-CLAUDE4SONNET"), recursive = TRUE)
 }
 
 # Create tissue mapping based on your sample information
@@ -719,3 +719,4 @@ if(nrow(goi_summary) > 0) {
 }
 
 print("\n=== ANALYSIS FRAMEWORK COMPLETED SUCCESSFULLY ===")
+
