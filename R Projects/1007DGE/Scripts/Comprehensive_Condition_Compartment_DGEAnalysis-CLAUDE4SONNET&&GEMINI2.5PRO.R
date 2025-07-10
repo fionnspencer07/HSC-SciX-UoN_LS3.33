@@ -5,7 +5,6 @@
 library(here)
 #init packages
 source(here("Custom R Functions and Scripts", "init_packages.R"))  # will only work if the rproj opened is HSC SciX UoN LS3.33
-library(EnhancedVolcano) # Added for new visualizations
 
 # Custom colors
 man_cols <- c("#86b0cc",  "#f3e65d", "#d5c1e7", "#eeb84c", "#82c39e", "#525252","#4d9f6b", "#b3939e", "#e76031", "#e9944b")
