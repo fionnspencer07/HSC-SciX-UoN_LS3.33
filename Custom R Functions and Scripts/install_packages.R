@@ -31,7 +31,7 @@ BiocManager::install("DESeq2", dependencies = TRUE)
 BiocManager::install("Nebulosa", dependencies = TRUE)
 BiocManager::install("scClassify", dependencies = TRUE)
 BiocManager::install("RColorBrewer", dependencies = TRUE)
-
+BiocManager::install("muscat", dependencies = TRUE)
 
 # GitHub package
 install.packages("devtools", dependencies = TRUE)
