@@ -37,4 +37,5 @@ library(edge)
 library(DT)
 library(patchwork)
 library(muscat)
+library(scater)
 
