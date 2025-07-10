@@ -16,7 +16,9 @@ seu <- readRDS(here("Data",
 seu_NKT <- subset(seu, subset = cell_types %in% c("T_cells", "NK_cells", "NKT_cells"))
 
 ## NK, T Cells - No Treatment [Excluding these Conditions (ONC201), (Dexmethasone), (ONC201 & Dexmethasone)]
-seu_NKT_focused <- subset(seu_NKT, subset = treatment %in% c("UT", "NAIVE", "SHAM"))# ============================================================================
+seu_NKT_focused <- subset(seu_NKT, subset = treatment %in% c("UT", "NAIVE", "SHAM"))
+
+# ============================================================================
 # COMPREHENSIVE CONDITION-COMPARTMENT ANALYSIS
 # All possible comparisons: WB vs BM, treatments within compartments
 # ============================================================================
@@ -44,9 +46,12 @@ create_tissue_mapping <- function(seu_obj) {
 seu_NKT_focused$compartment <- create_tissue_mapping(seu_NKT_focused)
 seu_NKT_focused$condition <- seu_NKT_focused$treatment
 
-# Create comprehensive grouping variables
+# Create comprehensive grouping variables (FIXED - using sample_name)
 seu_NKT_focused$condition_compartment <- paste(seu_NKT_focused$condition, seu_NKT_focused$compartment, sep = "_")
-seu_NKT_focused$sample_condition_compartment <- paste(seu_NKT_focused$sample_id, seu_NKT_focused$compartment, sep = "_")
+seu_NKT_focused$sample_condition_compartment <- paste(seu_NKT_focused$sample_name, seu_NKT_focused$compartment, sep = "_")
+
+# Create a proper sample_id for muscat compatibility
+seu_NKT_focused$sample_id <- paste(seu_NKT_focused$treatment, seu_NKT_focused$orig.ident, sep = "_")
 
 # Verify the setup
 print("=== DATA STRUCTURE VERIFICATION ===")
@@ -61,7 +66,7 @@ print(table(seu_NKT_focused$condition_compartment))
 
 print("Sample distribution:")
 sample_summary <- seu_NKT_focused@meta.data %>%
-  group_by(sample_id, condition, compartment, condition_compartment) %>%
+  group_by(sample_name, condition, compartment, condition_compartment) %>%  # FIXED - using sample_name
   summarise(n_cells = n(), .groups = "drop")
 print(sample_summary)
 
@@ -118,12 +123,12 @@ for(condition in unique(seu_NKT_focused$condition)) {
         # Compare WB vs BM
         tryCatch({
           markers <- FindMarkers(seu_subset,
-                               ident.1 = "WB",
-                               ident.2 = "BM",
-                               min.pct = 0.1,
-                               logfc.threshold = 0.1,
-                               test.use = "wilcox",
-                               verbose = FALSE)
+                                 ident.1 = "WB",
+                                 ident.2 = "BM",
+                                 min.pct = 0.1,
+                                 logfc.threshold = 0.1,
+                                 test.use = "wilcox",
+                                 verbose = FALSE)
           
           if(nrow(markers) > 0) {
             markers$gene <- rownames(markers)
@@ -171,12 +176,12 @@ for(cell_type in unique(seu_NKT_focused$cell_types)) {
     # Compare WB vs BM
     tryCatch({
       markers <- FindMarkers(seu_subset,
-                           ident.1 = "WB",
-                           ident.2 = "BM",
-                           min.pct = 0.1,
-                           logfc.threshold = 0.1,
-                           test.use = "wilcox",
-                           verbose = FALSE)
+                             ident.1 = "WB",
+                             ident.2 = "BM",
+                             min.pct = 0.1,
+                             logfc.threshold = 0.1,
+                             test.use = "wilcox",
+                             verbose = FALSE)
       
       if(nrow(markers) > 0) {
         markers$gene <- rownames(markers)
@@ -246,12 +251,12 @@ for(comp in condition_comparisons) {
         # Compare conditions
         tryCatch({
           markers <- FindMarkers(seu_subset,
-                               ident.1 = comp[1],
-                               ident.2 = comp[2],
-                               min.pct = 0.1,
-                               logfc.threshold = 0.1,
-                               test.use = "wilcox",
-                               verbose = FALSE)
+                                 ident.1 = comp[1],
+                                 ident.2 = comp[2],
+                                 min.pct = 0.1,
+                                 logfc.threshold = 0.1,
+                                 test.use = "wilcox",
+                                 verbose = FALSE)
           
           if(nrow(markers) > 0) {
             markers$gene <- rownames(markers)
@@ -312,12 +317,12 @@ for(comp in condition_comparisons) {
         # Compare conditions
         tryCatch({
           markers <- FindMarkers(seu_subset,
-                               ident.1 = comp[1],
-                               ident.2 = comp[2],
-                               min.pct = 0.1,
-                               logfc.threshold = 0.1,
-                               test.use = "wilcox",
-                               verbose = FALSE)
+                                 ident.1 = comp[1],
+                                 ident.2 = comp[2],
+                                 min.pct = 0.1,
+                                 logfc.threshold = 0.1,
+                                 test.use = "wilcox",
+                                 verbose = FALSE)
           
           if(nrow(markers) > 0) {
             markers$gene <- rownames(markers)
@@ -353,20 +358,27 @@ print("--- Pseudobulk: WB vs BM ---")
 
 sce_compartment <- as.SingleCellExperiment(seu_NKT_focused)
 colData(sce_compartment)$cluster_id <- sce_compartment$cell_types
-colData(sce_compartment)$sample_id <- paste(sce_compartment$sample_id, sce_compartment$compartment, sep = "_")
+# FIXED - Use sample_name for original sample ID, then modify for muscat
+colData(sce_compartment)$sample_id <- paste(sce_compartment$sample_name, sce_compartment$compartment, sep = "_")
 colData(sce_compartment)$group_id <- sce_compartment$compartment
 colData(sce_compartment)$condition <- sce_compartment$condition
 
 sce_compartment <- prepSCE(sce_compartment, 
-                          kid = "cluster_id",
-                          sid = "sample_id", 
-                          gid = "group_id",
-                          drop = TRUE)
+                           kid = "cluster_id",
+                           sid = "sample_id", 
+                           gid = "group_id",
+                           drop = TRUE)
+
+print("Sample summary for compartment comparison:")
+print(metadata(sce_compartment)$experiment_info)
 
 pb_compartment <- aggregateData(sce_compartment, assay = "counts", fun = "sum")
 
 # Run muscat for compartment comparison
+print("Running muscat edgeR for compartment comparison...")
 muscat_compartment_edgeR <- pbDS(pb_compartment, method = "edgeR", filter = "both", min_cells = 10)
+
+print("Running muscat DESeq2 for compartment comparison...")
 muscat_compartment_DESeq2 <- pbDS(pb_compartment, method = "DESeq2", filter = "both", min_cells = 10)
 
 # Extract results
@@ -401,19 +413,24 @@ for(compartment in c("WB", "BM")) {
     
     sce_condition <- as.SingleCellExperiment(seu_comp)
     colData(sce_condition)$cluster_id <- sce_condition$cell_types
-    colData(sce_condition)$sample_id <- sce_condition$sample_id
+    # FIXED - Use sample_name as the base sample identifier
+    colData(sce_condition)$sample_id <- sce_condition$sample_name
     colData(sce_condition)$group_id <- sce_condition$condition
     
     sce_condition <- prepSCE(sce_condition, 
-                            kid = "cluster_id",
-                            sid = "sample_id", 
-                            gid = "group_id",
-                            drop = TRUE)
+                             kid = "cluster_id",
+                             sid = "sample_id", 
+                             gid = "group_id",
+                             drop = TRUE)
+    
+    print(paste("Sample summary for", compartment, "condition comparison:"))
+    print(metadata(sce_condition)$experiment_info)
     
     pb_condition <- aggregateData(sce_condition, assay = "counts", fun = "sum")
     
     # Run muscat for condition comparison within compartment
     tryCatch({
+      print(paste("Running muscat edgeR for conditions within", compartment))
       muscat_cond_edgeR <- pbDS(pb_condition, method = "edgeR", filter = "both", min_cells = 5)
       muscat_cond_edgeR_res <- resDS(sce_condition, muscat_cond_edgeR, bind = "row", frq = FALSE, cmp = FALSE)
       
@@ -572,19 +589,19 @@ if(nrow(goi_summary) > 0) {
       mutate(
         significant = pvalue < 0.05,
         analysis_id = paste(comparison_type, 
-                           ifelse("cell_type" %in% colnames(.), cell_type, ""), 
-                           ifelse("comparison" %in% colnames(.), comparison, ""),
-                           ifelse("compartment" %in% colnames(.), compartment, ""),
-                           method, sep = "_")
+                            ifelse("cell_type" %in% colnames(.), cell_type, ""), 
+                            ifelse("comparison" %in% colnames(.), comparison, ""),
+                            ifelse("compartment" %in% colnames(.), compartment, ""),
+                            method, sep = "_")
       )
     
     if(nrow(goi_plot_data) > 0) {
       p_comprehensive_heatmap <- ggplot(goi_plot_data, 
-                                       aes(x = analysis_id, y = gene)) +
+                                        aes(x = analysis_id, y = gene)) +
         geom_tile(aes(fill = log2FC), color = "white") +
         geom_text(aes(label = ifelse(significant, "*", "")), size = 3) +
         scale_fill_gradient2(low = "blue", high = "red", mid = "white", 
-                            midpoint = 0, name = "Log2FC") +
+                             midpoint = 0, name = "Log2FC") +
         facet_wrap(~comparison_type, scales = "free_x", ncol = 1) +
         theme_minimal() +
         theme(axis.text.x = element_text(angle = 45, hjust = 1),
@@ -679,11 +696,11 @@ for(comp_type in c("Compartment", "Condition_within_Compartment")) {
   total_genes <- sum(sapply(type_results, nrow))
   
   comparison_type_summary <- rbind(comparison_type_summary,
-                                  data.frame(
-                                    Comparison_Type = comp_type,
-                                    N_Analyses = n_analyses,
-                                    Total_Gene_Results = total_genes
-                                  ))
+                                   data.frame(
+                                     Comparison_Type = comp_type,
+                                     N_Analyses = n_analyses,
+                                     Total_Gene_Results = total_genes
+                                   ))
 }
 
 print("Summary by comparison type:")
