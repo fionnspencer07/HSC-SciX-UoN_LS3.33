@@ -15,6 +15,10 @@ install.packages("viridis", dependencies = TRUE)
 install.packages("gridExtra", dependencies = TRUE)
 install.packages("ggrepel", dependencies = TRUE)
 install.packages("ggpubr", dependencies = TRUE)
+install.packages("ggridges", dependencies = TRUE)
+install.packages("future", dependencies = TRUE)
+install.packages("future.apply", dependencies = TRUE)
+install.packages("progressr", dependencies = TRUE)
 
 # Bioconductor setup
 install.packages("BiocManager", dependencies = TRUE)
@@ -36,6 +40,12 @@ BiocManager::install("scater", dependencies = TRUE)
 BiocManager::install("Rvisdiff", dependencies = TRUE)
 BiocManager::install("EnhancedVolcano", dependencies = TRUE)
 
+# Trajectory analysis packages
+BiocManager::install("monocle3", dependencies = TRUE)
+BiocManager::install("slingshot", dependencies = TRUE)
+BiocManager::install("tradeSeq", dependencies = TRUE)
+BiocManager::install("SingleCellExperiment", dependencies = TRUE)
+
 # GitHub package
 install.packages("devtools", dependencies = TRUE)
 devtools::install_github("immunogenomics/presto", dependencies = TRUE)
@@ -44,3 +54,6 @@ remotes::install_github("nx10/httpgd", dependencies = TRUE)
 
 # Seurat (CRAN)
 install.packages("Seurat", dependencies = TRUE)
+
+cat("Package installation complete!\n")
+cat("All packages required for the S1P analysis pipeline have been installed.\n")
