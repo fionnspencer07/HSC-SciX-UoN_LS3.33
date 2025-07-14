@@ -18,6 +18,8 @@ seu_NKT <- subset(seu, subset = cell_types %in% c("T_cells", "NK_cells", "NKT_ce
 ## NK, T Cells - No Treatment [Excluding these Conditions (ONC201), (Dexmethasone), (ONC201 & Dexmethasone)]
 seu_NKT_focused <- subset(seu_NKT, subset = treatment %in% c("UT", "NAIVE", "SHAM"))
 
+saveRDS(seu_NKT_focused, file = here("Data", "seu_NKT_focused.RDS"))
+
 # Define Genes of Interest
 s1pr_genes <- c("S1pr1", "S1pr2", "S1pr3", "S1pr4", "S1pr5")
 trafficking_genes <- c("Ccr7", "Sell", "Cd69", "Klf2", "Cxcr4", "Cd44", "Itgae", "Itgal")

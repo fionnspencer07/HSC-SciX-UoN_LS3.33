@@ -9,7 +9,7 @@ library(ComplexHeatmap)
 
 # Custom colors
 man_cols <- c("#86b0cc",  "#f3e65d", "#d5c1e7", "#eeb84c", "#82c39e", "#525252","#4d9f6b", "#b3939e", "#e76031", "#e9944b")
-names(man_cols) <- c("B_cells", "NK_cells", "monocytes", "T_cells", "neutrophils", "megakaryocytes", "pDCs",
+names(man_cols) <- c("B_cells", "NK_cells", "monocytes, "T_cells", "neutrophils", "megakaryocytes", "pDCs",
                      "plasma_cells", "progenitor_cells", "NKT_cells")
 #importing RDS & Init as a Seurat Object
 seu <- readRDS(here("Data",
@@ -31,8 +31,8 @@ seu_NKT_focused <- subset(seu_NKT, subset = treatment %in% c("UT", "NAIVE", "SHA
 print("=== COMPREHENSIVE CONDITION-COMPARTMENT ANALYSIS ===")
 
 # Create results directory with your specified path
-if(!dir.exists(here("R Projects", "1007DGE", "DGEAnalysis-C4S_V4"))) {
-  dir.create(here("R Projects", "1007DGE", "DGEAnalysis-C4S_V4"), recursive = TRUE)
+if(!dir.exists(here("R Projects", "1007DGE", "DGEAnalysis-C4S_V5"))) {
+  dir.create(here("R Projects", "1007DGE", "DGEAnalysis-C4S_V5"), recursive = TRUE)
 }
 
 # Create tissue mapping based on your sample information
@@ -758,7 +758,7 @@ for(result_name in names(all_results)) {
       filename <- paste0("volcano_", safe_filename, ".pdf")
       
       # Save volcano plot
-      ggsave(here("R Projects", "1007DGE", "DGEAnalysis-C4S_V4", filename), 
+      ggsave(here("R Projects", "1007DGE", "DGEAnalysis-C4S_V5", filename), 
              p_volcano, width = 12, height = 8, dpi = 300)
       
       volcano_count <- volcano_count + 1
@@ -940,7 +940,7 @@ create_method_heatmap <- function(results_list, method_name, output_dir) {
 }
 
 # Create heatmaps for each method
-output_dir <- here("R Projects", "1007DGE", "DGEAnalysis-C4S_V4")
+output_dir <- here("R Projects", "1007DGE", "DGEAnalysis-C4S_V5")
 
 create_method_heatmap(all_results, "Wilcoxon", output_dir)
 create_method_heatmap(all_results, "muscat_edgeR", output_dir)
@@ -1194,7 +1194,7 @@ if(nrow(goi_summary) > 0) {
 }
 
 # Save the comprehensive workbook
-saveWorkbook(wb, here("R Projects", "1007DGE", "DGEAnalysis-C4S_V4", "Comprehensive_DGE_Analysis_Results.xlsx"), overwrite = TRUE)
+saveWorkbook(wb, here("R Projects", "1007DGE", "DGEAnalysis-C4S_V5", "Comprehensive_DGE_Analysis_Results.xlsx"), overwrite = TRUE)
 
 print("=== COMPREHENSIVE EXCEL EXPORT COMPLETE ===")
 print("Generated comprehensive Excel file with multiple sheets:")
@@ -1218,7 +1218,7 @@ print("- GOI_Pairwise")
 # ============================================================================
 
 print("\n=== COMPREHENSIVE ANALYSIS COMPLETE ===")
-print("Generated files in R Projects/1007DGE/DGEAnalysis-C4S_V4/:")
+print("Generated files in R Projects/1007DGE/DGEAnalysis-C4S_V5/:")
 print("- Comprehensive_DGE_Analysis_Results.xlsx (all results in multiple sheets)")
 print("- Individual volcano plots for each comparison")
 print("- Method-specific heatmaps (ggplot2 and pheatmap versions)")
