@@ -15,6 +15,14 @@ install.packages("viridis", dependencies = TRUE)
 install.packages("gridExtra", dependencies = TRUE)
 install.packages("ggrepel", dependencies = TRUE)
 install.packages("ggpubr", dependencies = TRUE)
+install.packages("pheatmap", dependencies = TRUE)
+install.packages("corrplot", dependencies = TRUE)
+install.packages("scales", dependencies = TRUE)
+install.packages("ggsci", dependencies = TRUE)
+install.packages("ggridges", dependencies = TRUE)
+install.packages("patchwork", dependencies = TRUE)
+install.packages("VennDiagram", dependencies = TRUE)
+install.packages("UpSetR", dependencies = TRUE)
 
 # Bioconductor setup
 install.packages("BiocManager", dependencies = TRUE)
@@ -35,20 +43,23 @@ BiocManager::install("muscat", dependencies = TRUE)
 BiocManager::install("scater", dependencies = TRUE)
 BiocManager::install("Rvisdiff", dependencies = TRUE)
 BiocManager::install("EnhancedVolcano", dependencies = TRUE)
-BiocManager::install("monocle3", dependencies = TRUE)
 BiocManager::install("slingshot", dependencies = TRUE)
 BiocManager::install("clusterProfiler", dependencies = TRUE)
 BiocManager::install("fgsea", dependencies = TRUE)
 BiocManager::install("org.Mm.eg.db", dependencies = TRUE)
 BiocManager::install("GO.db", dependencies = TRUE)
 BiocManager::install("scran", dependencies = TRUE)
-
+BiocManager::install(c('BiocGenerics', 'DelayedArray', 'DelayedMatrixStats',
+                       'limma', 'lme4', 'S4Vectors', 'SingleCellExperiment',
+                       'SummarizedExperiment', 'batchelor', 'HDF5Array',
+                       'ggrastr'), dependencies = TRUE)
 
 # GitHub package
 install.packages("devtools", dependencies = TRUE)
 devtools::install_github("immunogenomics/presto", dependencies = TRUE)
 remotes::install_github("nx10/httpgd", dependencies = TRUE)
-
+remotes::install_github("bnprks/BPCells/r", dependencies = TRUE)
+devtools::install_github("cole-trapnell-lab/monocle3", dependencies = TRUE)
 
 # Seurat (CRAN)
 install.packages("Seurat", dependencies = TRUE)
