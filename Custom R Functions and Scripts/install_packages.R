@@ -35,6 +35,14 @@ BiocManager::install("muscat", dependencies = TRUE)
 BiocManager::install("scater", dependencies = TRUE)
 BiocManager::install("Rvisdiff", dependencies = TRUE)
 BiocManager::install("EnhancedVolcano", dependencies = TRUE)
+BiocManager::install("monocle3", dependencies = TRUE)
+BiocManager::install("slingshot", dependencies = TRUE)
+BiocManager::install("clusterProfiler", dependencies = TRUE)
+BiocManager::install("fgsea", dependencies = TRUE)
+BiocManager::install("org.Mm.eg.db", dependencies = TRUE)
+BiocManager::install("GO.db", dependencies = TRUE)
+BiocManager::install("scran", dependencies = TRUE)
+
 
 # GitHub package
 install.packages("devtools", dependencies = TRUE)
