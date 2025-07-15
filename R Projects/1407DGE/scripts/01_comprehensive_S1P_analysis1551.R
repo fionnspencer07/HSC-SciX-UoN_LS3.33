@@ -3,44 +3,9 @@
 # Date: 2025-07-14
 # User: fionnspencer07
 # ==============================================================================
-
-# Load all required libraries
-library(tidyverse)
 library(here)
-library(Seurat)
-library(openxlsx)
-library(viridis)
-library(ggrepel)
-library(ggpubr)
-library(ComplexHeatmap)
-library(EnhancedVolcano)
-library(Nebulosa)
-library(presto)
-library(muscat)
-library(edgeR)
-library(DESeq2)
-library(pheatmap)
-library(corrplot)
-library(scales)
-library(ggsci)
-library(ggridges)
-library(patchwork)
-library(monocle3)
-library(slingshot)
-library(clusterProfiler)
-library(fgsea)
-library(org.Mm.eg.db)
-library(cowplot)
-library(glue)
-library(gridExtra)
-library(ggplotify)
-library(dittoSeq)
-library(RColorBrewer)
-library(scater)
-library(scran)
-library(VennDiagram)
-library(UpSetR)
-
+# Load all required libraries
+source(here("Custom R Functions and Scripts", "init_packages.R"))
 # Set seed for reproducibility
 set.seed(42)
 
@@ -951,3 +916,4 @@ for(subdir in subdirs) {
 }
 
 cat("\nComprehensive analysis pipeline completed successfully!\n")
+
