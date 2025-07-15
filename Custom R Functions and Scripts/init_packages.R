@@ -26,6 +26,8 @@ library(scrapper)
 library(DESeq2)
 library(edgeR)
 library(Rvisdiff)
+library(SummarizedExperiment)
+library(MAST)
 
 # Cell Annotation & Databases
 library(clusterProfiler)
