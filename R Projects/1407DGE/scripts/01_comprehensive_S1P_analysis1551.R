@@ -709,7 +709,7 @@ for(set_name in names(gene_sets)) {
     tryCatch({
       density_plots <- list()
       for(gene in genes_to_plot) {
-        density_plots[[gene]] <- plot_density(seu_NKT_focused, gene, size = 0.5) +
+        density_plots[[gene]] <- Nebulosa::plot_density(seu_NKT_focused, gene, size = 0.5) +
           facet_wrap(~condition, ncol = 3) +
           ggtitle(gene) +
           theme(plot.title = element_text(hjust = 0.5))
