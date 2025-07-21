@@ -1,0 +1,41 @@
+# S1P Receptor DGE Analysis Summary Report
+Analysis completed on: 2025-07-16 21:55:33.604215
+
+## Dataset Information
+Total cells analyzed: 15696
+Total genes: 29657
+Cell types: NK_cells, T_cells, NKT_cells
+Treatments: NAIVE, SHAM, UT
+Tissues: WB, BM
+
+## Analysis Methods
+- Wilcoxon rank-sum test
+- MAST (Model-based Analysis of Single-cell Transcriptomics)
+- Pseudobulk DESeq2
+- Pseudobulk edgeR
+
+## Key Findings
+Total contrasts analyzed: 15
+S1P pathway genes analyzed: S1pr1, S1pr4, S1pr5, Sphk1, Sphk2, Sgpl1
+Trafficking genes analyzed: Cxcr4, Sell, Ccr7, Itgal, Cd62l, Psgl1, Lfa1
+
+## Output Files Generated
+- Excel files with comprehensive results for each method
+- Volcano plots for all contrasts
+- Heatmaps for gene expression patterns
+- Violin plots showing expression distributions
+- Nebulosa density plots
+- Trajectory analysis with Monocle3
+- Correlation plots between S1P and trafficking genes
+- GSEA enrichment analysis
+- Statistical power analysis
+
+## Files Located In:
+Output directory: C:/Users/fionn/Newcastle Grammar School/NGS SciX-2025 UoN DMG Cancer Signalling - Bioinformatics and Proteomics/Fionn Git/HSC-SciX-UoN_LS3.33/R Projects/1607DGE/output/Run 1
+- Excel_Files/: Comprehensive DGE results
+- Plots/: Various visualization outputs
+- Heatmaps/: Expression heatmaps
+- Volcano_Plots/: Volcano plots for all contrasts
+- Violin_Plots/: Expression distribution plots
+- Nebulosa_Plots/: Density plots
+- Trajectory_Analysis/: Monocle3 pseudotime analysis

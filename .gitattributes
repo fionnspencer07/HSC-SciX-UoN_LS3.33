@@ -16,3 +16,4 @@ R[[:space:]]Projects/3006/Data/output_scRNAseq_blood_export_NKT_cell_cluster_202
 *.xlsx filter=lfs diff=lfs merge=lfs -text
 *.csv filter=lfs diff=lfs merge=lfs -text
 *.html linguist-detectable=false
+*.rds filter=lfs diff=lfs merge=lfs -text
