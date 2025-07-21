@@ -5,3 +5,14 @@ Data/DEG_presto_ONC_UT_Sham_Naive_T_cells.xlsx filter=lfs diff=lfs merge=lfs -te
 DEG_presto_ONC_UT_Sham_Naive_NK_and_T_cells.xlsx filter=lfs diff=lfs merge=lfs -text
 Data/DEG_presto_ONC_UT_Sham_Naive_NK_and_T_cells.xlsx filter=lfs diff=lfs merge=lfs -text
 Data/output_scRNAseq_blood_export_NKT_cell_cluster_20251.html filter=lfs diff=lfs merge=lfs -text
+R[[:space:]]Projects/0507DGE/output_scRNAseq_blood_export_NKT_cell_cluster_20251.html filter=lfs diff=lfs merge=lfs -text
+R[[:space:]]Projects/1007DGE/Comprehensive_Condition_Compartment_DGEAnalysis-CLAUDE4SONNET/compartment_comparison_results.rds filter=lfs diff=lfs merge=lfs -text
+R[[:space:]]Projects/1007DGE/Comprehensive_Condition_Compartment_DGEAnalysis-CLAUDE4SONNET/comprehensive_all_results.rds filter=lfs diff=lfs merge=lfs -text
+R[[:space:]]Projects/1007DGE/Comprehensive_Condition_Compartment_DGEAnalysis-CLAUDE4SONNET/comprehensive_GOI_results_FIXED.rds filter=lfs diff=lfs merge=lfs -text
+R[[:space:]]Projects/1007DGE/Comprehensive_Condition_Compartment_DGEAnalysis-CLAUDE4SONNET/condition_comparison_results.rds filter=lfs diff=lfs merge=lfs -text
+R[[:space:]]Projects/1007DGE/output/seu_NKT_focused.RDS filter=lfs diff=lfs merge=lfs -text
+R[[:space:]]Projects/3006/Data/output_scRNAseq_blood_export_NKT_cell_cluster_20251.html filter=lfs diff=lfs merge=lfs -text
+*.svg filter=lfs diff=lfs merge=lfs -text
+*.xlsx filter=lfs diff=lfs merge=lfs -text
+*.csv filter=lfs diff=lfs merge=lfs -text
+*.html linguist-detectable=false
