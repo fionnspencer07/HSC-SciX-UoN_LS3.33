@@ -1,0 +1,8 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+*.html
+*.HTML
+*/Data
+rstudio-server-2025.05.1-513-amd64.deb
