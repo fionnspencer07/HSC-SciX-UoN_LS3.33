@@ -20,7 +20,6 @@
 
 # --- 1. INITIAL SETUP & DATA LOADING ---
 
-
 # Set seed for reproducibility across all analyses
 set.seed(42)
 
@@ -177,8 +176,7 @@ save_svg(plot_top50_heatmap(mast_results$UT_vs_NAIVE, "MAST"), "ComplexHeatmap_T
 
 save_svg(dittoPlot(seu_NKT_focused, "S1pr1", group.by = "treatment", plots = c("vlnplot", "boxplot"), color.panel = treatment_colors) + labs(title = "S1pr1 Expression by Treatment") + stat_compare_means(comparisons = list(c("UT", "NAIVE"), c("UT", "SHAM")), label = "p.signif"), "VlnBox_S1pr1_by_Treatment.svg")
 save_svg(dittoPlot(seu_NKT_focused, "S1pr1", group.by = "treatment", split.by = "tissue", plots = c("vlnplot", "jitter"), jitter.size = 0.1) + labs(title = "S1pr1 Expression by Treatment and Tissue"), "Vln_S1pr1_by_Tissue.svg", width = 12)
-save_svg(plot_density(seu_NKT_focused, features = "S1pr1", reduction = "harmony", group.by = "treatment") + labs(title = "S1pr1 Expression Density by Treatment (UMAP)"), "Nebulosa_S1pr1_by_Treatment.svg")
-save_svg(plot_density(seu_NKT_focused, features = "S1pr1", reduction = "harmony", group.by = "tissue") + labs(title = "S1pr1 Expression Density by Tissue (UMAP)"), "Nebulosa_S1pr1_by_Tissue.svg")
+save_svg(Nebulosa::plot_density(seu_NKT_focused, "S1pr1") + facet_wrap(.~seu_NKT_focused$sample_name, ncol = 3) + theme_void(), "Nebulosa_S1pr1_by_Treatment.svg")
 
 ranks <- wilcox_results[["UT_vs_NAIVE"]] %>% dplyr::select(gene, avg_log2FC) %>% na.omit() %>% distinct(gene, .keep_all = TRUE) %>% deframe()
 pathways <- list(S1P_Pathway = s1pr_genes, Trafficking = trafficking_genes, BM_Retention = retention_genes, T_Cell_Egress = egress_genes)
