@@ -197,6 +197,11 @@ for (i in names(pairwise_comparisons)) {
   
   # Prepare count matrix and metadata
   count_mat <- GetAssayData(seu_sub, assay = "RNA", slot = "counts")
+  
+  # Filter out genes with zero counts across all selected cells
+  keep_genes <- rowSums(count_mat) > 0
+  count_mat <- count_mat[keep_genes, ]
+  
   col_data <- seu_sub@meta.data
   
   # Ensure sample_name is an unordered factor with levels in the pairwise order
@@ -208,7 +213,7 @@ for (i in names(pairwise_comparisons)) {
   
   dds <- DESeq(dds)
   
-  # Use first group vs second group as contrast (same as Wilcoxon)
+  # Use first group vs second group as contrast (same direction as Wilcoxon)
   res <- results(dds, contrast = c("sample_name", pairwise_comparisons[[i]][1], pairwise_comparisons[[i]][2]))
   
   deg_T <- as.data.frame(res) %>%
