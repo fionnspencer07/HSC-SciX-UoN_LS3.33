@@ -34,13 +34,27 @@ source(here("Custom R Functions and Scripts", "init_packages.R"))
 
 # Configuration
 
-Custom Colours
+## Custom Colours
 
 ```{r}
 # Custom colors
 man_cols <- c("#86b0cc",  "#f3e65d", "#d5c1e7", "#eeb84c", "#82c39e", "#525252","#4d9f6b", "#b3939e", "#e76031", "#e9944b")
 names(man_cols) <- c("B_cells", "NK_cells", "monocytes", "T_cells", "neutrophils", "megakaryocytes", "pDCs",
                      "plasma_cells", "progenitor_cells", "NKT_cells")
+```
+
+## Output Folders
+
+### Primary
+
+```{r}
+dir.create(here("R Projects", "2107", "output"))
+```
+
+### DGE
+
+```{r}
+dir.create(here("R Projects", "2107", "output", "de_analysis"))
 ```
 
 # Import & Pre-processing of Data
@@ -90,4 +104,123 @@ Excluding:
 
 ```{r}
 seu_NKT_focused <- subset(seu_NKT, subset = treatment %in% c("UT", "NAIVE", "SHAM"))
+```
+
+# Differential Gene Expression Analysis
+
+```{r}
+seu_T <- subset(seu_NKT_focused, subset = T_clusters %in% "T_cells")
+```
+
+## Wilcoxon signed-rank test
+
+### T Cells
+
+```{r}
+
+# Define the gene list you want to focus on
+selected_genes <- c("S1pr1", "S1pr2", "S1pr3", "S1pr4", "S1pr5", 
+                    "Ccr7", "Sell", "Cd69", "Klf2", "Cxcr4", "Cd44", "Itgae", "Itgal")
+
+pairwise_comparisons <- list(
+  "NAIVE_WB_vs_NAIVE_BM"     = c("Naive_WB", "Naive_BM"),
+  "NAIVE_WB_vs_SHAM_WB"      = c("Naive_WB", "Sham_WB"),
+  "NAIVE_WB_vs_SHAM_BM"      = c("Naive_WB", "Sham_BM"),
+  "NAIVE_WB_vs_UT_WB"        = c("Naive_WB", "UT_WB"),
+  "NAIVE_WB_vs_UT_BM"        = c("Naive_WB", "UT_BM"),
+  "NAIVE_BM_vs_SHAM_WB"      = c("Naive_BM", "Sham_WB"),
+  "NAIVE_BM_vs_SHAM_BM"      = c("Naive_BM", "Sham_BM"),
+  "NAIVE_BM_vs_UT_WB"        = c("Naive_BM", "UT_WB"),
+  "NAIVE_BM_vs_UT_BM"        = c("Naive_BM", "UT_BM"),
+  "SHAM_WB_vs_SHAM_BM"       = c("Sham_WB", "Sham_BM"),
+  "SHAM_WB_vs_UT_WB"         = c("Sham_WB", "UT_WB"),
+  "SHAM_WB_vs_UT_BM"         = c("Sham_WB", "UT_BM"),
+  "SHAM_BM_vs_UT_WB"         = c("Sham_BM", "UT_WB"),
+  "SHAM_BM_vs_UT_BM"         = c("Sham_BM", "UT_BM"),
+  "UT_WB_vs_UT_BM"           = c("UT_WB", "UT_BM")
+)
+
+wb <- createWorkbook()
+
+for (i in names(pairwise_comparisons)) {
+  
+  deg_T <- wilcoxauc(seu_T, group_by = "sample_name", groups_use = pairwise_comparisons[[i]])
+  
+  addWorksheet(wb, sheetName = i)
+  
+  deg_T <- deg_T %>%
+    filter(group == pairwise_comparisons[[i]][[1]]) %>%
+    filter(feature %in% selected_genes) %>%   # <- Filter only your selected genes
+    arrange(group, -logFC)
+  
+  writeData(wb, sheet = i, x = deg_T)
+}
+
+saveWorkbook(wb, here("R Projects", "2107", "output", "de_analysis", "DE_presto_filtered.xlsx"), overwrite = TRUE)
+
+```
+
+## deseq2
+
+### T Cells
+
+```{r}
+# Define the gene list you want to focus on
+selected_genes <- c("S1pr1", "S1pr2", "S1pr3", "S1pr4", "S1pr5", 
+                    "Ccr7", "Sell", "Cd69", "Klf2", "Cxcr4", "Cd44", "Itgae", "Itgal")
+
+pairwise_comparisons <- list(
+  "NAIVE_WB_vs_NAIVE_BM"     = c("Naive_WB", "Naive_BM"),
+  "NAIVE_WB_vs_SHAM_WB"      = c("Naive_WB", "Sham_WB"),
+  "NAIVE_WB_vs_SHAM_BM"      = c("Naive_WB", "Sham_BM"),
+  "NAIVE_WB_vs_UT_WB"        = c("Naive_WB", "UT_WB"),
+  "NAIVE_WB_vs_UT_BM"        = c("Naive_WB", "UT_BM"),
+  "NAIVE_BM_vs_SHAM_WB"      = c("Naive_BM", "Sham_WB"),
+  "NAIVE_BM_vs_SHAM_BM"      = c("Naive_BM", "Sham_BM"),
+  "NAIVE_BM_vs_UT_WB"        = c("Naive_BM", "UT_WB"),
+  "NAIVE_BM_vs_UT_BM"        = c("Naive_BM", "UT_BM"),
+  "SHAM_WB_vs_SHAM_BM"       = c("Sham_WB", "Sham_BM"),
+  "SHAM_WB_vs_UT_WB"         = c("Sham_WB", "UT_WB"),
+  "SHAM_WB_vs_UT_BM"         = c("Sham_WB", "UT_BM"),
+  "SHAM_BM_vs_UT_WB"         = c("Sham_BM", "UT_WB"),
+  "SHAM_BM_vs_UT_BM"         = c("Sham_BM", "UT_BM"),
+  "UT_WB_vs_UT_BM"           = c("UT_WB", "UT_BM")
+)
+
+wb_deseq2 <- createWorkbook()
+
+for (i in names(pairwise_comparisons)) {
+  
+  # Subset Seurat object to groups of interest
+  cells_use <- WhichCells(seu_T, expression = sample_name %in% pairwise_comparisons[[i]])
+  seu_sub <- subset(seu_T, cells = cells_use)
+  
+  # Prepare count matrix and metadata
+  count_mat <- GetAssayData(seu_sub, assay = "RNA", slot = "counts")
+  col_data <- seu_sub@meta.data
+  
+  # Ensure sample_name is an unordered factor with levels in the pairwise order
+  col_data$sample_name <- factor(col_data$sample_name, levels = pairwise_comparisons[[i]], ordered = FALSE)
+  
+  dds <- DESeqDataSetFromMatrix(countData = count_mat,
+                                colData = col_data,
+                                design = ~ sample_name)
+  
+  dds <- DESeq(dds)
+  
+  # Use first group vs second group as contrast (same as Wilcoxon)
+  res <- results(dds, contrast = c("sample_name", pairwise_comparisons[[i]][1], pairwise_comparisons[[i]][2]))
+  
+  deg_T <- as.data.frame(res) %>%
+    rownames_to_column("feature") %>%
+    filter(feature %in% selected_genes) %>%
+    arrange(log2FoldChange)
+  
+  addWorksheet(wb_deseq2, sheetName = i)
+  writeData(wb_deseq2, sheet = i, x = deg_T)
+}
+
+saveWorkbook(wb_deseq2, here("R Projects", "2107", "output", "de_analysis", "DE_deseq2_filtered.xlsx"), overwrite = TRUE)
+
+
 ```
