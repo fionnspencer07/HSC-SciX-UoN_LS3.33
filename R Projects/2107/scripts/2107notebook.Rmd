@@ -108,13 +108,13 @@ seu_NKT_focused <- subset(seu_NKT, subset = treatment %in% c("UT", "NAIVE", "SHA
 
 # Differential Gene Expression Analysis
 
+## T Cells
+
 ```{r}
 seu_T <- subset(seu_NKT_focused, subset = T_clusters %in% "T_cells")
 ```
 
-## Wilcoxon signed-rank test
-
-### T Cells
+### Wilcoxon signed-rank test
 
 ```{r}
 
@@ -160,9 +160,7 @@ saveWorkbook(wb, here("R Projects", "2107", "output", "de_analysis", "DE_presto_
 
 ```
 
-## deseq2
-
-### T Cells
+### deseq2
 
 ```{r}
 # Define the gene list you want to focus on
@@ -187,45 +185,30 @@ pairwise_comparisons <- list(
   "UT_WB_vs_UT_BM"           = c("UT_WB", "UT_BM")
 )
 
-wb_deseq2 <- createWorkbook()
+wb <- createWorkbook()
 
 for (i in names(pairwise_comparisons)) {
   
-  # Subset Seurat object to groups of interest
-  cells_use <- WhichCells(seu_T, expression = sample_name %in% pairwise_comparisons[[i]])
-  seu_sub <- subset(seu_T, cells = cells_use)
+  # Use pseudobulk approach for DESeq2 or use a different test
+  # Option 1: Use negative binomial test instead (more appropriate for scRNA-seq)
+  deg_T <- FindMarkers(seu_T, 
+                       ident.1 = pairwise_comparisons[[i]][[1]], 
+                       ident.2 = pairwise_comparisons[[i]][[2]], 
+                       group.by = "sample_name", 
+                       test.use = "negbinom",
+                       slot = "counts")  # Use raw counts
   
-  # Prepare count matrix and metadata
-  count_mat <- GetAssayData(seu_sub, assay = "RNA", slot = "counts")
+  addWorksheet(wb, sheetName = i)
   
-  # Filter out genes with zero counts across all selected cells
-  keep_genes <- rowSums(count_mat) > 0
-  count_mat <- count_mat[keep_genes, ]
-  
-  col_data <- seu_sub@meta.data
-  
-  # Ensure sample_name is an unordered factor with levels in the pairwise order
-  col_data$sample_name <- factor(col_data$sample_name, levels = pairwise_comparisons[[i]], ordered = FALSE)
-  
-  dds <- DESeqDataSetFromMatrix(countData = count_mat,
-                                colData = col_data,
-                                design = ~ sample_name)
-  
-  dds <- DESeq(dds)
-  
-  # Use first group vs second group as contrast (same direction as Wilcoxon)
-  res <- results(dds, contrast = c("sample_name", pairwise_comparisons[[i]][1], pairwise_comparisons[[i]][2]))
-  
-  deg_T <- as.data.frame(res) %>%
+  deg_T <- deg_T %>%
     rownames_to_column("feature") %>%
-    filter(feature %in% selected_genes) %>%
-    arrange(log2FoldChange)
+    mutate(group = pairwise_comparisons[[i]][[1]]) %>%
+    rename(logFC = avg_log2FC) %>%
+    filter(feature %in% selected_genes) %>%   # <- Filter only your selected genes
+    arrange(group, -logFC)
   
-  addWorksheet(wb_deseq2, sheetName = i)
-  writeData(wb_deseq2, sheet = i, x = deg_T)
+  writeData(wb, sheet = i, x = deg_T)
 }
 
-saveWorkbook(wb_deseq2, here("R Projects", "2107", "output", "de_analysis", "DE_deseq2_filtered.xlsx"), overwrite = TRUE)
-
-
+saveWorkbook(wb, here("R Projects", "2107", "output", "de_analysis", "DE_deseq2_filtered.xlsx"), overwrite = TRUE)
 ```
