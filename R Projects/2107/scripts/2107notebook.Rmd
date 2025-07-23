@@ -106,6 +106,12 @@ Excluding:
 seu_NKT_focused <- subset(seu_NKT, subset = treatment %in% c("UT", "NAIVE", "SHAM"))
 ```
 
+For later scripting - load seu_NKT_focused
+
+```{r}
+seu_NKT_focused <- readRDS(here("Data", "seu_NKT_focused.RDS"))
+```
+
 # Differential Gene Expression Analysis
 
 ## T Cells
@@ -211,4 +217,70 @@ for (i in names(pairwise_comparisons)) {
 }
 
 saveWorkbook(wb, here("R Projects", "2107", "output", "de_analysis", "DE_deseq2_filtered.xlsx"), overwrite = TRUE)
+```
+
+### edgeR - Empirical Methods for DE (Negative Binomial Distribution)
+
+```{r}
+
+```
+
+###  
+
+### MAST
+
+```{r}
+# Define the gene list you want to focus on
+selected_genes <- c("S1pr1", "S1pr2", "S1pr3", "S1pr4", "S1pr5", 
+                    "Ccr7", "Sell", "Cd69", "Klf2", "Cxcr4", "Cd44", "Itgae", "Itgal")
+
+pairwise_comparisons <- list(
+  "NAIVE_WB_vs_NAIVE_BM"     = c("Naive_WB", "Naive_BM"),
+  "NAIVE_WB_vs_SHAM_WB"      = c("Naive_WB", "Sham_WB"),
+  "NAIVE_WB_vs_SHAM_BM"      = c("Naive_WB", "Sham_BM"),
+  "NAIVE_WB_vs_UT_WB"        = c("Naive_WB", "UT_WB"),
+  "NAIVE_WB_vs_UT_BM"        = c("Naive_WB", "UT_BM"),
+  "NAIVE_BM_vs_SHAM_WB"      = c("Naive_BM", "Sham_WB"),
+  "NAIVE_BM_vs_SHAM_BM"      = c("Naive_BM", "Sham_BM"),
+  "NAIVE_BM_vs_UT_WB"        = c("Naive_BM", "UT_WB"),
+  "NAIVE_BM_vs_UT_BM"        = c("Naive_BM", "UT_BM"),
+  "SHAM_WB_vs_SHAM_BM"       = c("Sham_WB", "Sham_BM"),
+  "SHAM_WB_vs_UT_WB"         = c("Sham_WB", "UT_WB"),
+  "SHAM_WB_vs_UT_BM"         = c("Sham_WB", "UT_BM"),
+  "SHAM_BM_vs_UT_WB"         = c("Sham_BM", "UT_WB"),
+  "SHAM_BM_vs_UT_BM"         = c("Sham_BM", "UT_BM"),
+  "UT_WB_vs_UT_BM"           = c("UT_WB", "UT_BM")
+)
+
+library(MAST)
+library(openxlsx)
+library(dplyr)
+library(here)
+library(Seurat)
+
+wb_mast <- createWorkbook()
+
+for (i in names(pairwise_comparisons)) {
+  
+  cells_use <- WhichCells(seu_T, expression = sample_name %in% pairwise_comparisons[[i]])
+  seu_sub <- subset(seu_T, cells = cells_use)
+  
+  expr_mat <- GetAssayData(seu_sub, assay = "RNA", slot = "counts")
+  cdr <- colSums(expr_mat > 0)  # Cellular detection rate
+  
+  sca <- FromMatrix(exprsArray = expr_mat,
+                    cData = data.frame(wellKey = colnames(expr_mat),
+                                       sample_name = seu_sub@meta.data$sample_name,
+                                       cdr = cdr))
+  
+  sca$cData$condition <- factor(sca$cData$sample_name, levels = pairwise_comparisons[[i]])
+  
+  zlmCond <- zlm(~ condition + cdr, sca)
+  summaryCond <- summary(zlmCond, doLRT = "condition2")
+  summaryDt <- summaryCond$datatable
+  
+  deg_T <- summaryDt %>%
+    filter(component == "H" & contrast == "condition2") %>%
+   
+
 ```
