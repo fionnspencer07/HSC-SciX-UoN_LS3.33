@@ -50,6 +50,8 @@ BiocManager::install("org.Mm.eg.db", dependencies = TRUE)
 BiocManager::install("GO.db", dependencies = TRUE)
 BiocManager::install("scran", dependencies = TRUE)
 BiocManager::install("MAST", dependencies = TRUE)
+BiocManager::install("limma", dependencies = TRUE)
+
 BiocManager::install("SummarizedExperiment", dependencies = TRUE)
 BiocManager::install(c('BiocGenerics', 'DelayedArray', 'DelayedMatrixStats',
                        'limma', 'lme4', 'S4Vectors', 'SingleCellExperiment',
