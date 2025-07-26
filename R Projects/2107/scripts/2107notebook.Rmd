@@ -362,8 +362,6 @@ saveWorkbook(wb, here("R Projects", "2107", "output", "de_analysis", "DE_edger_f
 
 ```
 
-### 
-
 ### MAST
 
 ```{r}
@@ -469,7 +467,7 @@ for (i in names(pairwise_comparisons)) {
 # Save the workbook
 saveWorkbook(
   wb,
-  here("R Projects", "2107", "output", "de_analysis", "DE_fm-T-test_filtered.xlsx"),
+  here("R Projects", "2107", "output", "de_analysis", "DE_Ttest_filtered.xlsx"),
   overwrite = TRUE
 )
 ```
