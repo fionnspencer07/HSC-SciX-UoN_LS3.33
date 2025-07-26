@@ -26,8 +26,10 @@ library(here)
 
 # Set Up Working Environment
 
+## Set Seed
+
 ```{r}
-set.seed(47)
+set.seed(210825)
 ```
 
 ## Load Packages & Functions
@@ -111,6 +113,24 @@ seu_NKT_focused <- subset(seu_NKT, subset = treatment %in% c("UT", "NAIVE", "SHA
 ```
 
 For later scripting - load seu_NKT_focused
+
+#### Export
+
+Use either base or Biogenerics
+
+##### Biogenerics
+
+```{r}
+saveRDS(seu_NKT_focused, file = here("Data", "seu_NKT_focused") )
+```
+
+##### Base
+
+```{r}
+base::saveRDS(seu_NKT_focused, file = here("Data", "seu_NKT_focused") )
+```
+
+#### Load RDS
 
 ```{r}
 seu_NKT_focused <- readRDS(here("Data", "seu_NKT_focused.RDS"))
@@ -411,7 +431,7 @@ saveWorkbook(wb, here("R Projects", "2107", "output", "de_analysis", "DE_mast_fi
 
 ```
 
-### Student's T-Test
+### Student's T Test
 
 ```{r}
 # Define the gene list you want to focus on
