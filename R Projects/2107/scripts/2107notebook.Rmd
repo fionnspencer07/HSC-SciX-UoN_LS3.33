@@ -120,7 +120,55 @@ seu_NKT_focused <- readRDS(here("Data", "seu_NKT_focused.RDS"))
 seu_T <- subset(seu_NKT_focused, subset = T_clusters %in% "T_cells")
 ```
 
-### Wilcoxon signed-rank test
+### (Seurat::Find Markers:wilcox Limma)
+
+```{r}
+# Define the gene list you want to focus on
+selected_genes <- c("S1pr1", "S1pr2", "S1pr3", "S1pr4", "S1pr5", 
+                    "Ccr7", "Sell", "Cd69", "Klf2", "Cxcr4", "Cd44", "Itgae", "Itgal")
+
+pairwise_comparisons <- list(
+  "NAIVE_WB_vs_NAIVE_BM"     = c("Naive_WB", "Naive_BM"),
+  "NAIVE_WB_vs_SHAM_WB"      = c("Naive_WB", "Sham_WB"),
+  "NAIVE_WB_vs_SHAM_BM"      = c("Naive_WB", "Sham_BM"),
+  "NAIVE_WB_vs_UT_WB"        = c("Naive_WB", "UT_WB"),
+  "NAIVE_WB_vs_UT_BM"        = c("Naive_WB", "UT_BM"),
+  "NAIVE_BM_vs_SHAM_WB"      = c("Naive_BM", "Sham_WB"),
+  "NAIVE_BM_vs_SHAM_BM"      = c("Naive_BM", "Sham_BM"),
+  "NAIVE_BM_vs_UT_WB"        = c("Naive_BM", "UT_WB"),
+  "NAIVE_BM_vs_UT_BM"        = c("Naive_BM", "UT_BM"),
+  "SHAM_WB_vs_SHAM_BM"       = c("Sham_WB", "Sham_BM"),
+  "SHAM_WB_vs_UT_WB"         = c("Sham_WB", "UT_WB"),
+  "SHAM_WB_vs_UT_BM"         = c("Sham_WB", "UT_BM"),
+  "SHAM_BM_vs_UT_WB"         = c("Sham_BM", "UT_WB"),
+  "SHAM_BM_vs_UT_BM"         = c("Sham_BM", "UT_BM"),
+  "UT_WB_vs_UT_BM"           = c("UT_WB", "UT_BM")
+)
+
+wb <- createWorkbook()
+
+for (i in names(pairwise_comparisons)) {
+  
+  deg_T <- FindMarkers(seu_T, group.by = "sample_name", ident.1 = pairwise_comparisons[[i]][1], ident.2 = pairwise_comparisons[[i]][2], test.use = "wilcox_limma")
+  
+  addWorksheet(wb, sheetName = i)
+  
+  deg_T <- deg_T %>%
+    filter(rownames(.) %in% selected_genes) %>%   # <- Filter only your selected genes
+    arrange(-avg_log2FC)
+  
+  # Add gene names as a column
+  deg_T$gene <- rownames(deg_T)
+  deg_T <- deg_T %>% select(gene, everything())
+  
+  writeData(wb, sheet = i, x = deg_T)
+}
+
+saveWorkbook(wb, here("R Projects", "2107", "output", "de_analysis", "DE_wilcox-limma_filtered.xlsx"), overwrite = TRUE)
+
+```
+
+### (Presto) Wilcoxon signed-rank test
 
 ```{r}
 
@@ -162,7 +210,55 @@ for (i in names(pairwise_comparisons)) {
   writeData(wb, sheet = i, x = deg_T)
 }
 
-saveWorkbook(wb, here("R Projects", "2107", "output", "de_analysis", "DE_presto_filtered.xlsx"), overwrite = TRUE)
+saveWorkbook(wb, here("R Projects", "2107", "output", "de_analysis", "DE_presto-wilcoxauc_filtered.xlsx"), overwrite = TRUE)
+
+```
+
+### Wilcox Presto Find Markers
+
+```{r}
+# Define the gene list you want to focus on
+selected_genes <- c("S1pr1", "S1pr2", "S1pr3", "S1pr4", "S1pr5", 
+                    "Ccr7", "Sell", "Cd69", "Klf2", "Cxcr4", "Cd44", "Itgae", "Itgal")
+
+pairwise_comparisons <- list(
+  "NAIVE_WB_vs_NAIVE_BM"     = c("Naive_WB", "Naive_BM"),
+  "NAIVE_WB_vs_SHAM_WB"      = c("Naive_WB", "Sham_WB"),
+  "NAIVE_WB_vs_SHAM_BM"      = c("Naive_WB", "Sham_BM"),
+  "NAIVE_WB_vs_UT_WB"        = c("Naive_WB", "UT_WB"),
+  "NAIVE_WB_vs_UT_BM"        = c("Naive_WB", "UT_BM"),
+  "NAIVE_BM_vs_SHAM_WB"      = c("Naive_BM", "Sham_WB"),
+  "NAIVE_BM_vs_SHAM_BM"      = c("Naive_BM", "Sham_BM"),
+  "NAIVE_BM_vs_UT_WB"        = c("Naive_BM", "UT_WB"),
+  "NAIVE_BM_vs_UT_BM"        = c("Naive_BM", "UT_BM"),
+  "SHAM_WB_vs_SHAM_BM"       = c("Sham_WB", "Sham_BM"),
+  "SHAM_WB_vs_UT_WB"         = c("Sham_WB", "UT_WB"),
+  "SHAM_WB_vs_UT_BM"         = c("Sham_WB", "UT_BM"),
+  "SHAM_BM_vs_UT_WB"         = c("Sham_BM", "UT_WB"),
+  "SHAM_BM_vs_UT_BM"         = c("Sham_BM", "UT_BM"),
+  "UT_WB_vs_UT_BM"           = c("UT_WB", "UT_BM")
+)
+
+wb <- createWorkbook()
+
+for (i in names(pairwise_comparisons)) {
+  
+  deg_T <- FindMarkers(seu_T, group.by = "sample_name", ident.1 = pairwise_comparisons[[i]][1], ident.2 = pairwise_comparisons[[i]][2], test.use = "wilcox")
+  
+  addWorksheet(wb, sheetName = i)
+  
+  deg_T <- deg_T %>%
+    filter(rownames(.) %in% selected_genes) %>%   # <- Filter only your selected genes
+    arrange(-avg_log2FC)
+  
+  # Add gene names as a column
+  deg_T$gene <- rownames(deg_T)
+  deg_T <- deg_T %>% select(gene, everything())
+  
+  writeData(wb, sheet = i, x = deg_T)
+}
+
+saveWorkbook(wb, here("R Projects", "2107", "output", "de_analysis", "DE_wilcox-presto(seurat)_filtered.xlsx"), overwrite = TRUE)
 
 ```
 
@@ -195,37 +291,74 @@ wb <- createWorkbook()
 
 for (i in names(pairwise_comparisons)) {
   
-  # Use pseudobulk approach for DESeq2 or use a different test
-  # Option 1: Use negative binomial test instead (more appropriate for scRNA-seq)
-  deg_T <- FindMarkers(seu_T, 
-                       ident.1 = pairwise_comparisons[[i]][[1]], 
-                       ident.2 = pairwise_comparisons[[i]][[2]], 
-                       group.by = "sample_name", 
-                       test.use = "negbinom",
-                       slot = "counts")  # Use raw counts
+  deg_T <- FindMarkers(seu_T, group.by = "sample_name", ident.1 = pairwise_comparisons[[i]][1], ident.2 = pairwise_comparisons[[i]][2], test.use = "DESeq2")
   
   addWorksheet(wb, sheetName = i)
   
   deg_T <- deg_T %>%
-    rownames_to_column("feature") %>%
-    mutate(group = pairwise_comparisons[[i]][[1]]) %>%
-    rename(logFC = avg_log2FC) %>%
-    filter(feature %in% selected_genes) %>%   # <- Filter only your selected genes
-    arrange(group, -logFC)
+    filter(rownames(.) %in% selected_genes) %>%   # <- Filter only your selected genes
+    arrange(-avg_log2FC)
+  
+  # Add gene names as a column
+  deg_T$gene <- rownames(deg_T)
+  deg_T <- deg_T %>% select(gene, everything())
   
   writeData(wb, sheet = i, x = deg_T)
 }
 
 saveWorkbook(wb, here("R Projects", "2107", "output", "de_analysis", "DE_deseq2_filtered.xlsx"), overwrite = TRUE)
+
 ```
 
 ### edgeR - Empirical Methods for DE (Negative Binomial Distribution)
 
 ```{r}
+selected_genes <- c("S1pr1", "S1pr2", "S1pr3", "S1pr4", "S1pr5", 
+                    "Ccr7", "Sell", "Cd69", "Klf2", "Cxcr4", "Cd44", "Itgae", "Itgal")
+
+pairwise_comparisons <- list(
+  "NAIVE_WB_vs_NAIVE_BM"     = c("Naive_WB", "Naive_BM"),
+  "NAIVE_WB_vs_SHAM_WB"      = c("Naive_WB", "Sham_WB"),
+  "NAIVE_WB_vs_SHAM_BM"      = c("Naive_WB", "Sham_BM"),
+  "NAIVE_WB_vs_UT_WB"        = c("Naive_WB", "UT_WB"),
+  "NAIVE_WB_vs_UT_BM"        = c("Naive_WB", "UT_BM"),
+  "NAIVE_BM_vs_SHAM_WB"      = c("Naive_BM", "Sham_WB"),
+  "NAIVE_BM_vs_SHAM_BM"      = c("Naive_BM", "Sham_BM"),
+  "NAIVE_BM_vs_UT_WB"        = c("Naive_BM", "UT_WB"),
+  "NAIVE_BM_vs_UT_BM"        = c("Naive_BM", "UT_BM"),
+  "SHAM_WB_vs_SHAM_BM"       = c("Sham_WB", "Sham_BM"),
+  "SHAM_WB_vs_UT_WB"         = c("Sham_WB", "UT_WB"),
+  "SHAM_WB_vs_UT_BM"         = c("Sham_WB", "UT_BM"),
+  "SHAM_BM_vs_UT_WB"         = c("Sham_BM", "UT_WB"),
+  "SHAM_BM_vs_UT_BM"         = c("Sham_BM", "UT_BM"),
+  "UT_WB_vs_UT_BM"           = c("UT_WB", "UT_BM")
+)
+
+wb <- createWorkbook()
+
+for (i in names(pairwise_comparisons)) {
+  
+  deg_T <- FindMarkers(seu_T, group.by = "sample_name", ident.1 = pairwise_comparisons[[i]][1], ident.2 = pairwise_comparisons[[i]][2], test.use = "negbinom")
+  
+  addWorksheet(wb, sheetName = i)
+  
+  deg_T <- deg_T %>%
+    filter(rownames(.) %in% selected_genes) %>%   # <- Filter only your selected genes
+    arrange(-avg_log2FC)
+  
+  # Add gene names as a column
+  deg_T$gene <- rownames(deg_T)
+  deg_T <- deg_T %>% select(gene, everything())
+  
+  writeData(wb, sheet = i, x = deg_T)
+}
+
+saveWorkbook(wb, here("R Projects", "2107", "output", "de_analysis", "DE_edger_filtered.xlsx"), overwrite = TRUE)
+
 
 ```
 
-###  
+### 
 
 ### MAST
 
@@ -252,35 +385,87 @@ pairwise_comparisons <- list(
   "UT_WB_vs_UT_BM"           = c("UT_WB", "UT_BM")
 )
 
-library(MAST)
-library(openxlsx)
-library(dplyr)
-library(here)
-library(Seurat)
-
-wb_mast <- createWorkbook()
+wb <- createWorkbook()
 
 for (i in names(pairwise_comparisons)) {
   
-  cells_use <- WhichCells(seu_T, expression = sample_name %in% pairwise_comparisons[[i]])
-  seu_sub <- subset(seu_T, cells = cells_use)
+  deg_T <- FindMarkers(seu_T, group.by = "sample_name", ident.1 = pairwise_comparisons[[i]][1], ident.2 = pairwise_comparisons[[i]][2], test.use = "MAST")
   
-  expr_mat <- GetAssayData(seu_sub, assay = "RNA", slot = "counts")
-  cdr <- colSums(expr_mat > 0)  # Cellular detection rate
+  addWorksheet(wb, sheetName = i)
   
-  sca <- FromMatrix(exprsArray = expr_mat,
-                    cData = data.frame(wellKey = colnames(expr_mat),
-                                       sample_name = seu_sub@meta.data$sample_name,
-                                       cdr = cdr))
+  deg_T <- deg_T %>%
+    filter(rownames(.) %in% selected_genes) %>%   # <- Filter only your selected genes
+    arrange(-avg_log2FC)
   
-  sca$cData$condition <- factor(sca$cData$sample_name, levels = pairwise_comparisons[[i]])
+  # Add gene names as a column
+  deg_T$gene <- rownames(deg_T)
+  deg_T <- deg_T %>% select(gene, everything())
   
-  zlmCond <- zlm(~ condition + cdr, sca)
-  summaryCond <- summary(zlmCond, doLRT = "condition2")
-  summaryDt <- summaryCond$datatable
-  
-  deg_T <- summaryDt %>%
-    filter(component == "H" & contrast == "condition2") %>%
-   
+  writeData(wb, sheet = i, x = deg_T)
+}
 
+saveWorkbook(wb, here("R Projects", "2107", "output", "de_analysis", "DE_mast_filtered.xlsx"), overwrite = TRUE)
+
+
+```
+
+### Student's T-Test
+
+```{r}
+# Define the gene list you want to focus on
+selected_genes <- c("S1pr1", "S1pr2", "S1pr3", "S1pr4", "S1pr5", 
+                    "Ccr7", "Sell", "Cd69", "Klf2", "Cxcr4", "Cd44", "Itgae", "Itgal")
+
+pairwise_comparisons <- list(
+  "NAIVE_WB_vs_NAIVE_BM"     = c("Naive_WB", "Naive_BM"),
+  "NAIVE_WB_vs_SHAM_WB"      = c("Naive_WB", "Sham_WB"),
+  "NAIVE_WB_vs_SHAM_BM"      = c("Naive_WB", "Sham_BM"),
+  "NAIVE_WB_vs_UT_WB"        = c("Naive_WB", "UT_WB"),
+  "NAIVE_WB_vs_UT_BM"        = c("Naive_WB", "UT_BM"),
+  "NAIVE_BM_vs_SHAM_WB"      = c("Naive_BM", "Sham_WB"),
+  "NAIVE_BM_vs_SHAM_BM"      = c("Naive_BM", "Sham_BM"),
+  "NAIVE_BM_vs_UT_WB"        = c("Naive_BM", "UT_WB"),
+  "NAIVE_BM_vs_UT_BM"        = c("Naive_BM", "UT_BM"),
+  "SHAM_WB_vs_SHAM_BM"       = c("Sham_WB", "Sham_BM"),
+  "SHAM_WB_vs_UT_WB"         = c("Sham_WB", "UT_WB"),
+  "SHAM_WB_vs_UT_BM"         = c("Sham_WB", "UT_BM"),
+  "SHAM_BM_vs_UT_WB"         = c("Sham_BM", "UT_WB"),
+  "SHAM_BM_vs_UT_BM"         = c("Sham_BM", "UT_BM"),
+  "UT_WB_vs_UT_BM"           = c("UT_WB", "UT_BM")
+)
+
+# Create an Excel workbook
+wb <- createWorkbook()
+
+for (i in names(pairwise_comparisons)) {
+  
+  deg_T <- FindMarkers(
+    seu_T,
+    group.by = "sample_name",
+    ident.1 = pairwise_comparisons[[i]][1],
+    ident.2 = pairwise_comparisons[[i]][2],
+    test.use = "t"
+  )
+  
+  addWorksheet(wb, sheetName = i)
+  
+  # Filter for selected genes and sort by log2FC
+  deg_T <- deg_T %>%
+    filter(rownames(.) %in% selected_genes) %>%
+    arrange(-avg_log2FC)
+  
+  # Add gene names as a column and reorder
+  deg_T$gene <- rownames(deg_T)
+  deg_T <- deg_T %>% dplyr::select(gene, dplyr::everything())
+  
+  # Write to Excel sheet
+  writeData(wb, sheet = i, x = deg_T)
+}
+
+# Save the workbook
+saveWorkbook(
+  wb,
+  here("R Projects", "2107", "output", "de_analysis", "DE_fm-T-test_filtered.xlsx"),
+  overwrite = TRUE
+)
 ```
