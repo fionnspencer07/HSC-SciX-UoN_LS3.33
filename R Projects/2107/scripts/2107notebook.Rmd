@@ -1222,3 +1222,1163 @@ dir.create(dirname(output_path), recursive = TRUE, showWarnings = FALSE)
 # Save workbook
 saveWorkbook(wb, file = output_path, overwrite = TRUE)
 ```
+
+#### Ccr7
+
+```{r}
+# Define the gene of interest
+gene_of_interest <- "Ccr7"
+
+# Define pairwise comparisons
+pairwise_comparisons <- list(
+  "NAIVE_WB_vs_NAIVE_BM"     = c("Naive_WB", "Naive_BM"),
+  "NAIVE_WB_vs_SHAM_WB"      = c("Naive_WB", "Sham_WB"),
+  "NAIVE_WB_vs_SHAM_BM"      = c("Naive_WB", "Sham_BM"),
+  "NAIVE_WB_vs_UT_WB"        = c("Naive_WB", "UT_WB"),
+  "NAIVE_WB_vs_UT_BM"        = c("Naive_WB", "UT_BM"),
+  "NAIVE_BM_vs_SHAM_WB"      = c("Naive_BM", "Sham_WB"),
+  "NAIVE_BM_vs_SHAM_BM"      = c("Naive_BM", "Sham_BM"),
+  "NAIVE_BM_vs_UT_WB"        = c("Naive_BM", "UT_WB"),
+  "NAIVE_BM_vs_UT_BM"        = c("Naive_BM", "UT_BM"),
+  "SHAM_WB_vs_SHAM_BM"       = c("Sham_WB", "Sham_BM"),
+  "SHAM_WB_vs_UT_WB"         = c("Sham_WB", "UT_WB"),
+  "SHAM_WB_vs_UT_BM"         = c("Sham_WB", "UT_BM"),
+  "SHAM_BM_vs_UT_WB"         = c("Sham_BM", "UT_WB"),
+  "SHAM_BM_vs_UT_BM"         = c("Sham_BM", "UT_BM"),
+  "UT_WB_vs_UT_BM"           = c("UT_WB", "UT_BM")
+)
+
+# Initialize list to store results for FDR calculation
+all_pvalues <- numeric(length(pairwise_comparisons))
+results_list <- list()
+
+# Create workbook
+wb <- createWorkbook()
+
+# Loop through each pairwise comparison
+for (i in seq_along(pairwise_comparisons)) {
+  comparison_name <- names(pairwise_comparisons)[i]
+  groups <- pairwise_comparisons[[i]]
+  group1 <- groups[1]
+  group2 <- groups[2]
+  
+  cat("Processing comparison:", comparison_name, "\n")
+  
+  # Extract expression data for the gene of interest
+  gene_expression <- FetchData(seu_T, vars = gene_of_interest, layer = "data")
+  
+  # Get sample names from metadata
+  sample_names <- seu_T@meta.data$sample_name
+  
+  # Extract expression values for each group
+  group1_cells <- which(sample_names == group1)
+  group2_cells <- which(sample_names == group2)
+  
+  group1_expression <- gene_expression[group1_cells, gene_of_interest]
+  group2_expression <- gene_expression[group2_cells, gene_of_interest]
+  
+  # Check if both groups have data
+  if (length(group1_expression) == 0 || length(group2_expression) == 0) {
+    cat("Warning: No cells found for one or both groups in", comparison_name, "\n")
+    next
+  }
+  
+  # Perform Welch's t-test
+  t_test_result <- t.test(group1_expression, group2_expression, var.equal = FALSE)
+  
+  # Calculate means
+  mean_group1 <- mean(group1_expression, na.rm = TRUE)
+  mean_group2 <- mean(group2_expression, na.rm = TRUE)
+  
+  # Calculate log2 fold change (group1 - group2)
+  log2_fc <- mean_group1 - mean_group2
+  
+  # Extract results
+  t_statistic <- t_test_result$statistic
+  df <- t_test_result$parameter
+  p_value <- t_test_result$p.value
+  conf_int_lower <- t_test_result$conf.int[1]
+  conf_int_upper <- t_test_result$conf.int[2]
+  
+  # Store p-value for FDR calculation
+  all_pvalues[i] <- p_value
+  
+  # Create results data frame
+  results_df <- data.frame(
+    Gene = gene_of_interest,
+    Comparison = comparison_name,
+    Group1 = group1,
+    Group2 = group2,
+    N_Group1 = length(group1_expression),
+    N_Group2 = length(group2_expression),
+    Mean_Group1 = mean_group1,
+    Mean_Group2 = mean_group2,
+    Log2_Fold_Change = log2_fc,
+    t_Statistic = as.numeric(t_statistic),
+    Degrees_of_Freedom = as.numeric(df),
+    P_Value = p_value,
+    Conf_Int_Lower = conf_int_lower,
+    Conf_Int_Upper = conf_int_upper,
+    stringsAsFactors = FALSE
+  )
+  
+  # Store results for later FDR adjustment
+  results_list[[i]] <- results_df
+  
+  # Add worksheet to workbook
+  addWorksheet(wb, sheetName = comparison_name)
+  writeData(wb, sheet = comparison_name, x = results_df)
+}
+
+# Calculate FDR-adjusted p-values
+fdr_adjusted <- p.adjust(all_pvalues, method = "fdr")
+
+# Add FDR-adjusted p-values to each worksheet
+for (i in seq_along(results_list)) {
+  if (!is.null(results_list[[i]])) {
+    comparison_name <- names(pairwise_comparisons)[i]
+    
+    # Add FDR column to existing data
+    results_list[[i]]$FDR_Adjusted_P_Value <- fdr_adjusted[i]
+    
+    # Clear and rewrite the worksheet with updated data
+    removeWorksheet(wb, comparison_name)
+    addWorksheet(wb, sheetName = comparison_name)
+    writeData(wb, sheet = comparison_name, x = results_list[[i]])
+    
+    # Print summary for this comparison
+    cat("\n", comparison_name, ":\n")
+    cat("  t =", round(results_list[[i]]$t_Statistic, 4), "\n")
+    cat("  df =", round(results_list[[i]]$Degrees_of_Freedom, 2), "\n")
+    cat("  p-value =", format(results_list[[i]]$P_Value, scientific = TRUE), "\n")
+    cat("  FDR p-value =", format(results_list[[i]]$FDR_Adjusted_P_Value, scientific = TRUE), "\n")
+    cat("  95% CI: [", round(results_list[[i]]$Conf_Int_Lower, 4), ", ", 
+        round(results_list[[i]]$Conf_Int_Upper, 4), "]\n")
+    cat("  Log2 FC =", round(results_list[[i]]$Log2_Fold_Change, 4), "\n")
+  }
+}
+
+# Save the workbook
+output_path <- here("R Projects", "2107", "output", "de_analysis", "t.test", paste0(gene_of_interest, ".xlsx"))
+
+# Create directory if it doesn't exist
+dir.create(dirname(output_path), recursive = TRUE, showWarnings = FALSE)
+
+# Save workbook
+saveWorkbook(wb, file = output_path, overwrite = TRUE)
+```
+
+#### Sell
+
+```{r}
+# Define the gene of interest
+gene_of_interest <- "Sell"
+
+# Define pairwise comparisons
+pairwise_comparisons <- list(
+  "NAIVE_WB_vs_NAIVE_BM"     = c("Naive_WB", "Naive_BM"),
+  "NAIVE_WB_vs_SHAM_WB"      = c("Naive_WB", "Sham_WB"),
+  "NAIVE_WB_vs_SHAM_BM"      = c("Naive_WB", "Sham_BM"),
+  "NAIVE_WB_vs_UT_WB"        = c("Naive_WB", "UT_WB"),
+  "NAIVE_WB_vs_UT_BM"        = c("Naive_WB", "UT_BM"),
+  "NAIVE_BM_vs_SHAM_WB"      = c("Naive_BM", "Sham_WB"),
+  "NAIVE_BM_vs_SHAM_BM"      = c("Naive_BM", "Sham_BM"),
+  "NAIVE_BM_vs_UT_WB"        = c("Naive_BM", "UT_WB"),
+  "NAIVE_BM_vs_UT_BM"        = c("Naive_BM", "UT_BM"),
+  "SHAM_WB_vs_SHAM_BM"       = c("Sham_WB", "Sham_BM"),
+  "SHAM_WB_vs_UT_WB"         = c("Sham_WB", "UT_WB"),
+  "SHAM_WB_vs_UT_BM"         = c("Sham_WB", "UT_BM"),
+  "SHAM_BM_vs_UT_WB"         = c("Sham_BM", "UT_WB"),
+  "SHAM_BM_vs_UT_BM"         = c("Sham_BM", "UT_BM"),
+  "UT_WB_vs_UT_BM"           = c("UT_WB", "UT_BM")
+)
+
+# Initialize list to store results for FDR calculation
+all_pvalues <- numeric(length(pairwise_comparisons))
+results_list <- list()
+
+# Create workbook
+wb <- createWorkbook()
+
+# Loop through each pairwise comparison
+for (i in seq_along(pairwise_comparisons)) {
+  comparison_name <- names(pairwise_comparisons)[i]
+  groups <- pairwise_comparisons[[i]]
+  group1 <- groups[1]
+  group2 <- groups[2]
+  
+  cat("Processing comparison:", comparison_name, "\n")
+  
+  # Extract expression data for the gene of interest
+  gene_expression <- FetchData(seu_T, vars = gene_of_interest, layer = "data")
+  
+  # Get sample names from metadata
+  sample_names <- seu_T@meta.data$sample_name
+  
+  # Extract expression values for each group
+  group1_cells <- which(sample_names == group1)
+  group2_cells <- which(sample_names == group2)
+  
+  group1_expression <- gene_expression[group1_cells, gene_of_interest]
+  group2_expression <- gene_expression[group2_cells, gene_of_interest]
+  
+  # Check if both groups have data
+  if (length(group1_expression) == 0 || length(group2_expression) == 0) {
+    cat("Warning: No cells found for one or both groups in", comparison_name, "\n")
+    next
+  }
+  
+  # Perform Welch's t-test
+  t_test_result <- t.test(group1_expression, group2_expression, var.equal = FALSE)
+  
+  # Calculate means
+  mean_group1 <- mean(group1_expression, na.rm = TRUE)
+  mean_group2 <- mean(group2_expression, na.rm = TRUE)
+  
+  # Calculate log2 fold change (group1 - group2)
+  log2_fc <- mean_group1 - mean_group2
+  
+  # Extract results
+  t_statistic <- t_test_result$statistic
+  df <- t_test_result$parameter
+  p_value <- t_test_result$p.value
+  conf_int_lower <- t_test_result$conf.int[1]
+  conf_int_upper <- t_test_result$conf.int[2]
+  
+  # Store p-value for FDR calculation
+  all_pvalues[i] <- p_value
+  
+  # Create results data frame
+  results_df <- data.frame(
+    Gene = gene_of_interest,
+    Comparison = comparison_name,
+    Group1 = group1,
+    Group2 = group2,
+    N_Group1 = length(group1_expression),
+    N_Group2 = length(group2_expression),
+    Mean_Group1 = mean_group1,
+    Mean_Group2 = mean_group2,
+    Log2_Fold_Change = log2_fc,
+    t_Statistic = as.numeric(t_statistic),
+    Degrees_of_Freedom = as.numeric(df),
+    P_Value = p_value,
+    Conf_Int_Lower = conf_int_lower,
+    Conf_Int_Upper = conf_int_upper,
+    stringsAsFactors = FALSE
+  )
+  
+  # Store results for later FDR adjustment
+  results_list[[i]] <- results_df
+  
+  # Add worksheet to workbook
+  addWorksheet(wb, sheetName = comparison_name)
+  writeData(wb, sheet = comparison_name, x = results_df)
+}
+
+# Calculate FDR-adjusted p-values
+fdr_adjusted <- p.adjust(all_pvalues, method = "fdr")
+
+# Add FDR-adjusted p-values to each worksheet
+for (i in seq_along(results_list)) {
+  if (!is.null(results_list[[i]])) {
+    comparison_name <- names(pairwise_comparisons)[i]
+    
+    # Add FDR column to existing data
+    results_list[[i]]$FDR_Adjusted_P_Value <- fdr_adjusted[i]
+    
+    # Clear and rewrite the worksheet with updated data
+    removeWorksheet(wb, comparison_name)
+    addWorksheet(wb, sheetName = comparison_name)
+    writeData(wb, sheet = comparison_name, x = results_list[[i]])
+    
+    # Print summary for this comparison
+    cat("\n", comparison_name, ":\n")
+    cat("  t =", round(results_list[[i]]$t_Statistic, 4), "\n")
+    cat("  df =", round(results_list[[i]]$Degrees_of_Freedom, 2), "\n")
+    cat("  p-value =", format(results_list[[i]]$P_Value, scientific = TRUE), "\n")
+    cat("  FDR p-value =", format(results_list[[i]]$FDR_Adjusted_P_Value, scientific = TRUE), "\n")
+    cat("  95% CI: [", round(results_list[[i]]$Conf_Int_Lower, 4), ", ", 
+        round(results_list[[i]]$Conf_Int_Upper, 4), "]\n")
+    cat("  Log2 FC =", round(results_list[[i]]$Log2_Fold_Change, 4), "\n")
+  }
+}
+
+# Save the workbook
+output_path <- here("R Projects", "2107", "output", "de_analysis", "t.test", paste0(gene_of_interest, ".xlsx"))
+
+# Create directory if it doesn't exist
+dir.create(dirname(output_path), recursive = TRUE, showWarnings = FALSE)
+
+# Save workbook
+saveWorkbook(wb, file = output_path, overwrite = TRUE)
+```
+
+#### Cd69
+
+```{r}
+# Define the gene of interest
+gene_of_interest <- "Cd69"
+
+# Define pairwise comparisons
+pairwise_comparisons <- list(
+  "NAIVE_WB_vs_NAIVE_BM"     = c("Naive_WB", "Naive_BM"),
+  "NAIVE_WB_vs_SHAM_WB"      = c("Naive_WB", "Sham_WB"),
+  "NAIVE_WB_vs_SHAM_BM"      = c("Naive_WB", "Sham_BM"),
+  "NAIVE_WB_vs_UT_WB"        = c("Naive_WB", "UT_WB"),
+  "NAIVE_WB_vs_UT_BM"        = c("Naive_WB", "UT_BM"),
+  "NAIVE_BM_vs_SHAM_WB"      = c("Naive_BM", "Sham_WB"),
+  "NAIVE_BM_vs_SHAM_BM"      = c("Naive_BM", "Sham_BM"),
+  "NAIVE_BM_vs_UT_WB"        = c("Naive_BM", "UT_WB"),
+  "NAIVE_BM_vs_UT_BM"        = c("Naive_BM", "UT_BM"),
+  "SHAM_WB_vs_SHAM_BM"       = c("Sham_WB", "Sham_BM"),
+  "SHAM_WB_vs_UT_WB"         = c("Sham_WB", "UT_WB"),
+  "SHAM_WB_vs_UT_BM"         = c("Sham_WB", "UT_BM"),
+  "SHAM_BM_vs_UT_WB"         = c("Sham_BM", "UT_WB"),
+  "SHAM_BM_vs_UT_BM"         = c("Sham_BM", "UT_BM"),
+  "UT_WB_vs_UT_BM"           = c("UT_WB", "UT_BM")
+)
+
+# Initialize list to store results for FDR calculation
+all_pvalues <- numeric(length(pairwise_comparisons))
+results_list <- list()
+
+# Create workbook
+wb <- createWorkbook()
+
+# Loop through each pairwise comparison
+for (i in seq_along(pairwise_comparisons)) {
+  comparison_name <- names(pairwise_comparisons)[i]
+  groups <- pairwise_comparisons[[i]]
+  group1 <- groups[1]
+  group2 <- groups[2]
+  
+  cat("Processing comparison:", comparison_name, "\n")
+  
+  # Extract expression data for the gene of interest
+  gene_expression <- FetchData(seu_T, vars = gene_of_interest, layer = "data")
+  
+  # Get sample names from metadata
+  sample_names <- seu_T@meta.data$sample_name
+  
+  # Extract expression values for each group
+  group1_cells <- which(sample_names == group1)
+  group2_cells <- which(sample_names == group2)
+  
+  group1_expression <- gene_expression[group1_cells, gene_of_interest]
+  group2_expression <- gene_expression[group2_cells, gene_of_interest]
+  
+  # Check if both groups have data
+  if (length(group1_expression) == 0 || length(group2_expression) == 0) {
+    cat("Warning: No cells found for one or both groups in", comparison_name, "\n")
+    next
+  }
+  
+  # Perform Welch's t-test
+  t_test_result <- t.test(group1_expression, group2_expression, var.equal = FALSE)
+  
+  # Calculate means
+  mean_group1 <- mean(group1_expression, na.rm = TRUE)
+  mean_group2 <- mean(group2_expression, na.rm = TRUE)
+  
+  # Calculate log2 fold change (group1 - group2)
+  log2_fc <- mean_group1 - mean_group2
+  
+  # Extract results
+  t_statistic <- t_test_result$statistic
+  df <- t_test_result$parameter
+  p_value <- t_test_result$p.value
+  conf_int_lower <- t_test_result$conf.int[1]
+  conf_int_upper <- t_test_result$conf.int[2]
+  
+  # Store p-value for FDR calculation
+  all_pvalues[i] <- p_value
+  
+  # Create results data frame
+  results_df <- data.frame(
+    Gene = gene_of_interest,
+    Comparison = comparison_name,
+    Group1 = group1,
+    Group2 = group2,
+    N_Group1 = length(group1_expression),
+    N_Group2 = length(group2_expression),
+    Mean_Group1 = mean_group1,
+    Mean_Group2 = mean_group2,
+    Log2_Fold_Change = log2_fc,
+    t_Statistic = as.numeric(t_statistic),
+    Degrees_of_Freedom = as.numeric(df),
+    P_Value = p_value,
+    Conf_Int_Lower = conf_int_lower,
+    Conf_Int_Upper = conf_int_upper,
+    stringsAsFactors = FALSE
+  )
+  
+  # Store results for later FDR adjustment
+  results_list[[i]] <- results_df
+  
+  # Add worksheet to workbook
+  addWorksheet(wb, sheetName = comparison_name)
+  writeData(wb, sheet = comparison_name, x = results_df)
+}
+
+# Calculate FDR-adjusted p-values
+fdr_adjusted <- p.adjust(all_pvalues, method = "fdr")
+
+# Add FDR-adjusted p-values to each worksheet
+for (i in seq_along(results_list)) {
+  if (!is.null(results_list[[i]])) {
+    comparison_name <- names(pairwise_comparisons)[i]
+    
+    # Add FDR column to existing data
+    results_list[[i]]$FDR_Adjusted_P_Value <- fdr_adjusted[i]
+    
+    # Clear and rewrite the worksheet with updated data
+    removeWorksheet(wb, comparison_name)
+    addWorksheet(wb, sheetName = comparison_name)
+    writeData(wb, sheet = comparison_name, x = results_list[[i]])
+    
+    # Print summary for this comparison
+    cat("\n", comparison_name, ":\n")
+    cat("  t =", round(results_list[[i]]$t_Statistic, 4), "\n")
+    cat("  df =", round(results_list[[i]]$Degrees_of_Freedom, 2), "\n")
+    cat("  p-value =", format(results_list[[i]]$P_Value, scientific = TRUE), "\n")
+    cat("  FDR p-value =", format(results_list[[i]]$FDR_Adjusted_P_Value, scientific = TRUE), "\n")
+    cat("  95% CI: [", round(results_list[[i]]$Conf_Int_Lower, 4), ", ", 
+        round(results_list[[i]]$Conf_Int_Upper, 4), "]\n")
+    cat("  Log2 FC =", round(results_list[[i]]$Log2_Fold_Change, 4), "\n")
+  }
+}
+
+# Save the workbook
+output_path <- here("R Projects", "2107", "output", "de_analysis", "t.test", paste0(gene_of_interest, ".xlsx"))
+
+# Create directory if it doesn't exist
+dir.create(dirname(output_path), recursive = TRUE, showWarnings = FALSE)
+
+# Save workbook
+saveWorkbook(wb, file = output_path, overwrite = TRUE)
+```
+
+#### Klf2
+
+```{r}
+# Define the gene of interest
+gene_of_interest <- "Klf2"
+
+# Define pairwise comparisons
+pairwise_comparisons <- list(
+  "NAIVE_WB_vs_NAIVE_BM"     = c("Naive_WB", "Naive_BM"),
+  "NAIVE_WB_vs_SHAM_WB"      = c("Naive_WB", "Sham_WB"),
+  "NAIVE_WB_vs_SHAM_BM"      = c("Naive_WB", "Sham_BM"),
+  "NAIVE_WB_vs_UT_WB"        = c("Naive_WB", "UT_WB"),
+  "NAIVE_WB_vs_UT_BM"        = c("Naive_WB", "UT_BM"),
+  "NAIVE_BM_vs_SHAM_WB"      = c("Naive_BM", "Sham_WB"),
+  "NAIVE_BM_vs_SHAM_BM"      = c("Naive_BM", "Sham_BM"),
+  "NAIVE_BM_vs_UT_WB"        = c("Naive_BM", "UT_WB"),
+  "NAIVE_BM_vs_UT_BM"        = c("Naive_BM", "UT_BM"),
+  "SHAM_WB_vs_SHAM_BM"       = c("Sham_WB", "Sham_BM"),
+  "SHAM_WB_vs_UT_WB"         = c("Sham_WB", "UT_WB"),
+  "SHAM_WB_vs_UT_BM"         = c("Sham_WB", "UT_BM"),
+  "SHAM_BM_vs_UT_WB"         = c("Sham_BM", "UT_WB"),
+  "SHAM_BM_vs_UT_BM"         = c("Sham_BM", "UT_BM"),
+  "UT_WB_vs_UT_BM"           = c("UT_WB", "UT_BM")
+)
+
+# Initialize list to store results for FDR calculation
+all_pvalues <- numeric(length(pairwise_comparisons))
+results_list <- list()
+
+# Create workbook
+wb <- createWorkbook()
+
+# Loop through each pairwise comparison
+for (i in seq_along(pairwise_comparisons)) {
+  comparison_name <- names(pairwise_comparisons)[i]
+  groups <- pairwise_comparisons[[i]]
+  group1 <- groups[1]
+  group2 <- groups[2]
+  
+  cat("Processing comparison:", comparison_name, "\n")
+  
+  # Extract expression data for the gene of interest
+  gene_expression <- FetchData(seu_T, vars = gene_of_interest, layer = "data")
+  
+  # Get sample names from metadata
+  sample_names <- seu_T@meta.data$sample_name
+  
+  # Extract expression values for each group
+  group1_cells <- which(sample_names == group1)
+  group2_cells <- which(sample_names == group2)
+  
+  group1_expression <- gene_expression[group1_cells, gene_of_interest]
+  group2_expression <- gene_expression[group2_cells, gene_of_interest]
+  
+  # Check if both groups have data
+  if (length(group1_expression) == 0 || length(group2_expression) == 0) {
+    cat("Warning: No cells found for one or both groups in", comparison_name, "\n")
+    next
+  }
+  
+  # Perform Welch's t-test
+  t_test_result <- t.test(group1_expression, group2_expression, var.equal = FALSE)
+  
+  # Calculate means
+  mean_group1 <- mean(group1_expression, na.rm = TRUE)
+  mean_group2 <- mean(group2_expression, na.rm = TRUE)
+  
+  # Calculate log2 fold change (group1 - group2)
+  log2_fc <- mean_group1 - mean_group2
+  
+  # Extract results
+  t_statistic <- t_test_result$statistic
+  df <- t_test_result$parameter
+  p_value <- t_test_result$p.value
+  conf_int_lower <- t_test_result$conf.int[1]
+  conf_int_upper <- t_test_result$conf.int[2]
+  
+  # Store p-value for FDR calculation
+  all_pvalues[i] <- p_value
+  
+  # Create results data frame
+  results_df <- data.frame(
+    Gene = gene_of_interest,
+    Comparison = comparison_name,
+    Group1 = group1,
+    Group2 = group2,
+    N_Group1 = length(group1_expression),
+    N_Group2 = length(group2_expression),
+    Mean_Group1 = mean_group1,
+    Mean_Group2 = mean_group2,
+    Log2_Fold_Change = log2_fc,
+    t_Statistic = as.numeric(t_statistic),
+    Degrees_of_Freedom = as.numeric(df),
+    P_Value = p_value,
+    Conf_Int_Lower = conf_int_lower,
+    Conf_Int_Upper = conf_int_upper,
+    stringsAsFactors = FALSE
+  )
+  
+  # Store results for later FDR adjustment
+  results_list[[i]] <- results_df
+  
+  # Add worksheet to workbook
+  addWorksheet(wb, sheetName = comparison_name)
+  writeData(wb, sheet = comparison_name, x = results_df)
+}
+
+# Calculate FDR-adjusted p-values
+fdr_adjusted <- p.adjust(all_pvalues, method = "fdr")
+
+# Add FDR-adjusted p-values to each worksheet
+for (i in seq_along(results_list)) {
+  if (!is.null(results_list[[i]])) {
+    comparison_name <- names(pairwise_comparisons)[i]
+    
+    # Add FDR column to existing data
+    results_list[[i]]$FDR_Adjusted_P_Value <- fdr_adjusted[i]
+    
+    # Clear and rewrite the worksheet with updated data
+    removeWorksheet(wb, comparison_name)
+    addWorksheet(wb, sheetName = comparison_name)
+    writeData(wb, sheet = comparison_name, x = results_list[[i]])
+    
+    # Print summary for this comparison
+    cat("\n", comparison_name, ":\n")
+    cat("  t =", round(results_list[[i]]$t_Statistic, 4), "\n")
+    cat("  df =", round(results_list[[i]]$Degrees_of_Freedom, 2), "\n")
+    cat("  p-value =", format(results_list[[i]]$P_Value, scientific = TRUE), "\n")
+    cat("  FDR p-value =", format(results_list[[i]]$FDR_Adjusted_P_Value, scientific = TRUE), "\n")
+    cat("  95% CI: [", round(results_list[[i]]$Conf_Int_Lower, 4), ", ", 
+        round(results_list[[i]]$Conf_Int_Upper, 4), "]\n")
+    cat("  Log2 FC =", round(results_list[[i]]$Log2_Fold_Change, 4), "\n")
+  }
+}
+
+# Save the workbook
+output_path <- here("R Projects", "2107", "output", "de_analysis", "t.test", paste0(gene_of_interest, ".xlsx"))
+
+# Create directory if it doesn't exist
+dir.create(dirname(output_path), recursive = TRUE, showWarnings = FALSE)
+
+# Save workbook
+saveWorkbook(wb, file = output_path, overwrite = TRUE)
+```
+
+#### Cxcr4
+
+```{r}
+# Define the gene of interest
+gene_of_interest <- "Cxcr4"
+
+# Define pairwise comparisons
+pairwise_comparisons <- list(
+  "NAIVE_WB_vs_NAIVE_BM"     = c("Naive_WB", "Naive_BM"),
+  "NAIVE_WB_vs_SHAM_WB"      = c("Naive_WB", "Sham_WB"),
+  "NAIVE_WB_vs_SHAM_BM"      = c("Naive_WB", "Sham_BM"),
+  "NAIVE_WB_vs_UT_WB"        = c("Naive_WB", "UT_WB"),
+  "NAIVE_WB_vs_UT_BM"        = c("Naive_WB", "UT_BM"),
+  "NAIVE_BM_vs_SHAM_WB"      = c("Naive_BM", "Sham_WB"),
+  "NAIVE_BM_vs_SHAM_BM"      = c("Naive_BM", "Sham_BM"),
+  "NAIVE_BM_vs_UT_WB"        = c("Naive_BM", "UT_WB"),
+  "NAIVE_BM_vs_UT_BM"        = c("Naive_BM", "UT_BM"),
+  "SHAM_WB_vs_SHAM_BM"       = c("Sham_WB", "Sham_BM"),
+  "SHAM_WB_vs_UT_WB"         = c("Sham_WB", "UT_WB"),
+  "SHAM_WB_vs_UT_BM"         = c("Sham_WB", "UT_BM"),
+  "SHAM_BM_vs_UT_WB"         = c("Sham_BM", "UT_WB"),
+  "SHAM_BM_vs_UT_BM"         = c("Sham_BM", "UT_BM"),
+  "UT_WB_vs_UT_BM"           = c("UT_WB", "UT_BM")
+)
+
+# Initialize list to store results for FDR calculation
+all_pvalues <- numeric(length(pairwise_comparisons))
+results_list <- list()
+
+# Create workbook
+wb <- createWorkbook()
+
+# Loop through each pairwise comparison
+for (i in seq_along(pairwise_comparisons)) {
+  comparison_name <- names(pairwise_comparisons)[i]
+  groups <- pairwise_comparisons[[i]]
+  group1 <- groups[1]
+  group2 <- groups[2]
+  
+  cat("Processing comparison:", comparison_name, "\n")
+  
+  # Extract expression data for the gene of interest
+  gene_expression <- FetchData(seu_T, vars = gene_of_interest, layer = "data")
+  
+  # Get sample names from metadata
+  sample_names <- seu_T@meta.data$sample_name
+  
+  # Extract expression values for each group
+  group1_cells <- which(sample_names == group1)
+  group2_cells <- which(sample_names == group2)
+  
+  group1_expression <- gene_expression[group1_cells, gene_of_interest]
+  group2_expression <- gene_expression[group2_cells, gene_of_interest]
+  
+  # Check if both groups have data
+  if (length(group1_expression) == 0 || length(group2_expression) == 0) {
+    cat("Warning: No cells found for one or both groups in", comparison_name, "\n")
+    next
+  }
+  
+  # Perform Welch's t-test
+  t_test_result <- t.test(group1_expression, group2_expression, var.equal = FALSE)
+  
+  # Calculate means
+  mean_group1 <- mean(group1_expression, na.rm = TRUE)
+  mean_group2 <- mean(group2_expression, na.rm = TRUE)
+  
+  # Calculate log2 fold change (group1 - group2)
+  log2_fc <- mean_group1 - mean_group2
+  
+  # Extract results
+  t_statistic <- t_test_result$statistic
+  df <- t_test_result$parameter
+  p_value <- t_test_result$p.value
+  conf_int_lower <- t_test_result$conf.int[1]
+  conf_int_upper <- t_test_result$conf.int[2]
+  
+  # Store p-value for FDR calculation
+  all_pvalues[i] <- p_value
+  
+  # Create results data frame
+  results_df <- data.frame(
+    Gene = gene_of_interest,
+    Comparison = comparison_name,
+    Group1 = group1,
+    Group2 = group2,
+    N_Group1 = length(group1_expression),
+    N_Group2 = length(group2_expression),
+    Mean_Group1 = mean_group1,
+    Mean_Group2 = mean_group2,
+    Log2_Fold_Change = log2_fc,
+    t_Statistic = as.numeric(t_statistic),
+    Degrees_of_Freedom = as.numeric(df),
+    P_Value = p_value,
+    Conf_Int_Lower = conf_int_lower,
+    Conf_Int_Upper = conf_int_upper,
+    stringsAsFactors = FALSE
+  )
+  
+  # Store results for later FDR adjustment
+  results_list[[i]] <- results_df
+  
+  # Add worksheet to workbook
+  addWorksheet(wb, sheetName = comparison_name)
+  writeData(wb, sheet = comparison_name, x = results_df)
+}
+
+# Calculate FDR-adjusted p-values
+fdr_adjusted <- p.adjust(all_pvalues, method = "fdr")
+
+# Add FDR-adjusted p-values to each worksheet
+for (i in seq_along(results_list)) {
+  if (!is.null(results_list[[i]])) {
+    comparison_name <- names(pairwise_comparisons)[i]
+    
+    # Add FDR column to existing data
+    results_list[[i]]$FDR_Adjusted_P_Value <- fdr_adjusted[i]
+    
+    # Clear and rewrite the worksheet with updated data
+    removeWorksheet(wb, comparison_name)
+    addWorksheet(wb, sheetName = comparison_name)
+    writeData(wb, sheet = comparison_name, x = results_list[[i]])
+    
+    # Print summary for this comparison
+    cat("\n", comparison_name, ":\n")
+    cat("  t =", round(results_list[[i]]$t_Statistic, 4), "\n")
+    cat("  df =", round(results_list[[i]]$Degrees_of_Freedom, 2), "\n")
+    cat("  p-value =", format(results_list[[i]]$P_Value, scientific = TRUE), "\n")
+    cat("  FDR p-value =", format(results_list[[i]]$FDR_Adjusted_P_Value, scientific = TRUE), "\n")
+    cat("  95% CI: [", round(results_list[[i]]$Conf_Int_Lower, 4), ", ", 
+        round(results_list[[i]]$Conf_Int_Upper, 4), "]\n")
+    cat("  Log2 FC =", round(results_list[[i]]$Log2_Fold_Change, 4), "\n")
+  }
+}
+
+# Save the workbook
+output_path <- here("R Projects", "2107", "output", "de_analysis", "t.test", paste0(gene_of_interest, ".xlsx"))
+
+# Create directory if it doesn't exist
+dir.create(dirname(output_path), recursive = TRUE, showWarnings = FALSE)
+
+# Save workbook
+saveWorkbook(wb, file = output_path, overwrite = TRUE)
+```
+
+#### Cd44
+
+```{r}
+# Define the gene of interest
+gene_of_interest <- "Cd44"
+
+# Define pairwise comparisons
+pairwise_comparisons <- list(
+  "NAIVE_WB_vs_NAIVE_BM"     = c("Naive_WB", "Naive_BM"),
+  "NAIVE_WB_vs_SHAM_WB"      = c("Naive_WB", "Sham_WB"),
+  "NAIVE_WB_vs_SHAM_BM"      = c("Naive_WB", "Sham_BM"),
+  "NAIVE_WB_vs_UT_WB"        = c("Naive_WB", "UT_WB"),
+  "NAIVE_WB_vs_UT_BM"        = c("Naive_WB", "UT_BM"),
+  "NAIVE_BM_vs_SHAM_WB"      = c("Naive_BM", "Sham_WB"),
+  "NAIVE_BM_vs_SHAM_BM"      = c("Naive_BM", "Sham_BM"),
+  "NAIVE_BM_vs_UT_WB"        = c("Naive_BM", "UT_WB"),
+  "NAIVE_BM_vs_UT_BM"        = c("Naive_BM", "UT_BM"),
+  "SHAM_WB_vs_SHAM_BM"       = c("Sham_WB", "Sham_BM"),
+  "SHAM_WB_vs_UT_WB"         = c("Sham_WB", "UT_WB"),
+  "SHAM_WB_vs_UT_BM"         = c("Sham_WB", "UT_BM"),
+  "SHAM_BM_vs_UT_WB"         = c("Sham_BM", "UT_WB"),
+  "SHAM_BM_vs_UT_BM"         = c("Sham_BM", "UT_BM"),
+  "UT_WB_vs_UT_BM"           = c("UT_WB", "UT_BM")
+)
+
+# Initialize list to store results for FDR calculation
+all_pvalues <- numeric(length(pairwise_comparisons))
+results_list <- list()
+
+# Create workbook
+wb <- createWorkbook()
+
+# Loop through each pairwise comparison
+for (i in seq_along(pairwise_comparisons)) {
+  comparison_name <- names(pairwise_comparisons)[i]
+  groups <- pairwise_comparisons[[i]]
+  group1 <- groups[1]
+  group2 <- groups[2]
+  
+  cat("Processing comparison:", comparison_name, "\n")
+  
+  # Extract expression data for the gene of interest
+  gene_expression <- FetchData(seu_T, vars = gene_of_interest, layer = "data")
+  
+  # Get sample names from metadata
+  sample_names <- seu_T@meta.data$sample_name
+  
+  # Extract expression values for each group
+  group1_cells <- which(sample_names == group1)
+  group2_cells <- which(sample_names == group2)
+  
+  group1_expression <- gene_expression[group1_cells, gene_of_interest]
+  group2_expression <- gene_expression[group2_cells, gene_of_interest]
+  
+  # Check if both groups have data
+  if (length(group1_expression) == 0 || length(group2_expression) == 0) {
+    cat("Warning: No cells found for one or both groups in", comparison_name, "\n")
+    next
+  }
+  
+  # Perform Welch's t-test
+  t_test_result <- t.test(group1_expression, group2_expression, var.equal = FALSE)
+  
+  # Calculate means
+  mean_group1 <- mean(group1_expression, na.rm = TRUE)
+  mean_group2 <- mean(group2_expression, na.rm = TRUE)
+  
+  # Calculate log2 fold change (group1 - group2)
+  log2_fc <- mean_group1 - mean_group2
+  
+  # Extract results
+  t_statistic <- t_test_result$statistic
+  df <- t_test_result$parameter
+  p_value <- t_test_result$p.value
+  conf_int_lower <- t_test_result$conf.int[1]
+  conf_int_upper <- t_test_result$conf.int[2]
+  
+  # Store p-value for FDR calculation
+  all_pvalues[i] <- p_value
+  
+  # Create results data frame
+  results_df <- data.frame(
+    Gene = gene_of_interest,
+    Comparison = comparison_name,
+    Group1 = group1,
+    Group2 = group2,
+    N_Group1 = length(group1_expression),
+    N_Group2 = length(group2_expression),
+    Mean_Group1 = mean_group1,
+    Mean_Group2 = mean_group2,
+    Log2_Fold_Change = log2_fc,
+    t_Statistic = as.numeric(t_statistic),
+    Degrees_of_Freedom = as.numeric(df),
+    P_Value = p_value,
+    Conf_Int_Lower = conf_int_lower,
+    Conf_Int_Upper = conf_int_upper,
+    stringsAsFactors = FALSE
+  )
+  
+  # Store results for later FDR adjustment
+  results_list[[i]] <- results_df
+  
+  # Add worksheet to workbook
+  addWorksheet(wb, sheetName = comparison_name)
+  writeData(wb, sheet = comparison_name, x = results_df)
+}
+
+# Calculate FDR-adjusted p-values
+fdr_adjusted <- p.adjust(all_pvalues, method = "fdr")
+
+# Add FDR-adjusted p-values to each worksheet
+for (i in seq_along(results_list)) {
+  if (!is.null(results_list[[i]])) {
+    comparison_name <- names(pairwise_comparisons)[i]
+    
+    # Add FDR column to existing data
+    results_list[[i]]$FDR_Adjusted_P_Value <- fdr_adjusted[i]
+    
+    # Clear and rewrite the worksheet with updated data
+    removeWorksheet(wb, comparison_name)
+    addWorksheet(wb, sheetName = comparison_name)
+    writeData(wb, sheet = comparison_name, x = results_list[[i]])
+    
+    # Print summary for this comparison
+    cat("\n", comparison_name, ":\n")
+    cat("  t =", round(results_list[[i]]$t_Statistic, 4), "\n")
+    cat("  df =", round(results_list[[i]]$Degrees_of_Freedom, 2), "\n")
+    cat("  p-value =", format(results_list[[i]]$P_Value, scientific = TRUE), "\n")
+    cat("  FDR p-value =", format(results_list[[i]]$FDR_Adjusted_P_Value, scientific = TRUE), "\n")
+    cat("  95% CI: [", round(results_list[[i]]$Conf_Int_Lower, 4), ", ", 
+        round(results_list[[i]]$Conf_Int_Upper, 4), "]\n")
+    cat("  Log2 FC =", round(results_list[[i]]$Log2_Fold_Change, 4), "\n")
+  }
+}
+
+# Save the workbook
+output_path <- here("R Projects", "2107", "output", "de_analysis", "t.test", paste0(gene_of_interest, ".xlsx"))
+
+# Create directory if it doesn't exist
+dir.create(dirname(output_path), recursive = TRUE, showWarnings = FALSE)
+
+# Save workbook
+saveWorkbook(wb, file = output_path, overwrite = TRUE)
+```
+
+#### Itgae
+
+```{r}
+# Define the gene of interest
+gene_of_interest <- "Itgae"
+
+# Define pairwise comparisons
+pairwise_comparisons <- list(
+  "NAIVE_WB_vs_NAIVE_BM"     = c("Naive_WB", "Naive_BM"),
+  "NAIVE_WB_vs_SHAM_WB"      = c("Naive_WB", "Sham_WB"),
+  "NAIVE_WB_vs_SHAM_BM"      = c("Naive_WB", "Sham_BM"),
+  "NAIVE_WB_vs_UT_WB"        = c("Naive_WB", "UT_WB"),
+  "NAIVE_WB_vs_UT_BM"        = c("Naive_WB", "UT_BM"),
+  "NAIVE_BM_vs_SHAM_WB"      = c("Naive_BM", "Sham_WB"),
+  "NAIVE_BM_vs_SHAM_BM"      = c("Naive_BM", "Sham_BM"),
+  "NAIVE_BM_vs_UT_WB"        = c("Naive_BM", "UT_WB"),
+  "NAIVE_BM_vs_UT_BM"        = c("Naive_BM", "UT_BM"),
+  "SHAM_WB_vs_SHAM_BM"       = c("Sham_WB", "Sham_BM"),
+  "SHAM_WB_vs_UT_WB"         = c("Sham_WB", "UT_WB"),
+  "SHAM_WB_vs_UT_BM"         = c("Sham_WB", "UT_BM"),
+  "SHAM_BM_vs_UT_WB"         = c("Sham_BM", "UT_WB"),
+  "SHAM_BM_vs_UT_BM"         = c("Sham_BM", "UT_BM"),
+  "UT_WB_vs_UT_BM"           = c("UT_WB", "UT_BM")
+)
+
+# Initialize list to store results for FDR calculation
+all_pvalues <- numeric(length(pairwise_comparisons))
+results_list <- list()
+
+# Create workbook
+wb <- createWorkbook()
+
+# Loop through each pairwise comparison
+for (i in seq_along(pairwise_comparisons)) {
+  comparison_name <- names(pairwise_comparisons)[i]
+  groups <- pairwise_comparisons[[i]]
+  group1 <- groups[1]
+  group2 <- groups[2]
+  
+  cat("Processing comparison:", comparison_name, "\n")
+  
+  # Extract expression data for the gene of interest
+  gene_expression <- FetchData(seu_T, vars = gene_of_interest, layer = "data")
+  
+  # Get sample names from metadata
+  sample_names <- seu_T@meta.data$sample_name
+  
+  # Extract expression values for each group
+  group1_cells <- which(sample_names == group1)
+  group2_cells <- which(sample_names == group2)
+  
+  group1_expression <- gene_expression[group1_cells, gene_of_interest]
+  group2_expression <- gene_expression[group2_cells, gene_of_interest]
+  
+  # Check if both groups have data
+  if (length(group1_expression) == 0 || length(group2_expression) == 0) {
+    cat("Warning: No cells found for one or both groups in", comparison_name, "\n")
+    next
+  }
+  
+  # Perform Welch's t-test
+  t_test_result <- t.test(group1_expression, group2_expression, var.equal = FALSE)
+  
+  # Calculate means
+  mean_group1 <- mean(group1_expression, na.rm = TRUE)
+  mean_group2 <- mean(group2_expression, na.rm = TRUE)
+  
+  # Calculate log2 fold change (group1 - group2)
+  log2_fc <- mean_group1 - mean_group2
+  
+  # Extract results
+  t_statistic <- t_test_result$statistic
+  df <- t_test_result$parameter
+  p_value <- t_test_result$p.value
+  conf_int_lower <- t_test_result$conf.int[1]
+  conf_int_upper <- t_test_result$conf.int[2]
+  
+  # Store p-value for FDR calculation
+  all_pvalues[i] <- p_value
+  
+  # Create results data frame
+  results_df <- data.frame(
+    Gene = gene_of_interest,
+    Comparison = comparison_name,
+    Group1 = group1,
+    Group2 = group2,
+    N_Group1 = length(group1_expression),
+    N_Group2 = length(group2_expression),
+    Mean_Group1 = mean_group1,
+    Mean_Group2 = mean_group2,
+    Log2_Fold_Change = log2_fc,
+    t_Statistic = as.numeric(t_statistic),
+    Degrees_of_Freedom = as.numeric(df),
+    P_Value = p_value,
+    Conf_Int_Lower = conf_int_lower,
+    Conf_Int_Upper = conf_int_upper,
+    stringsAsFactors = FALSE
+  )
+  
+  # Store results for later FDR adjustment
+  results_list[[i]] <- results_df
+  
+  # Add worksheet to workbook
+  addWorksheet(wb, sheetName = comparison_name)
+  writeData(wb, sheet = comparison_name, x = results_df)
+}
+
+# Calculate FDR-adjusted p-values
+fdr_adjusted <- p.adjust(all_pvalues, method = "fdr")
+
+# Add FDR-adjusted p-values to each worksheet
+for (i in seq_along(results_list)) {
+  if (!is.null(results_list[[i]])) {
+    comparison_name <- names(pairwise_comparisons)[i]
+    
+    # Add FDR column to existing data
+    results_list[[i]]$FDR_Adjusted_P_Value <- fdr_adjusted[i]
+    
+    # Clear and rewrite the worksheet with updated data
+    removeWorksheet(wb, comparison_name)
+    addWorksheet(wb, sheetName = comparison_name)
+    writeData(wb, sheet = comparison_name, x = results_list[[i]])
+    
+    # Print summary for this comparison
+    cat("\n", comparison_name, ":\n")
+    cat("  t =", round(results_list[[i]]$t_Statistic, 4), "\n")
+    cat("  df =", round(results_list[[i]]$Degrees_of_Freedom, 2), "\n")
+    cat("  p-value =", format(results_list[[i]]$P_Value, scientific = TRUE), "\n")
+    cat("  FDR p-value =", format(results_list[[i]]$FDR_Adjusted_P_Value, scientific = TRUE), "\n")
+    cat("  95% CI: [", round(results_list[[i]]$Conf_Int_Lower, 4), ", ", 
+        round(results_list[[i]]$Conf_Int_Upper, 4), "]\n")
+    cat("  Log2 FC =", round(results_list[[i]]$Log2_Fold_Change, 4), "\n")
+  }
+}
+
+# Save the workbook
+output_path <- here("R Projects", "2107", "output", "de_analysis", "t.test", paste0(gene_of_interest, ".xlsx"))
+
+# Create directory if it doesn't exist
+dir.create(dirname(output_path), recursive = TRUE, showWarnings = FALSE)
+
+# Save workbook
+saveWorkbook(wb, file = output_path, overwrite = TRUE)
+```
+
+#### Itgal
+
+```{r}
+# Define the gene of interest
+gene_of_interest <- "Itgal"
+
+# Define pairwise comparisons
+pairwise_comparisons <- list(
+  "NAIVE_WB_vs_NAIVE_BM"     = c("Naive_WB", "Naive_BM"),
+  "NAIVE_WB_vs_SHAM_WB"      = c("Naive_WB", "Sham_WB"),
+  "NAIVE_WB_vs_SHAM_BM"      = c("Naive_WB", "Sham_BM"),
+  "NAIVE_WB_vs_UT_WB"        = c("Naive_WB", "UT_WB"),
+  "NAIVE_WB_vs_UT_BM"        = c("Naive_WB", "UT_BM"),
+  "NAIVE_BM_vs_SHAM_WB"      = c("Naive_BM", "Sham_WB"),
+  "NAIVE_BM_vs_SHAM_BM"      = c("Naive_BM", "Sham_BM"),
+  "NAIVE_BM_vs_UT_WB"        = c("Naive_BM", "UT_WB"),
+  "NAIVE_BM_vs_UT_BM"        = c("Naive_BM", "UT_BM"),
+  "SHAM_WB_vs_SHAM_BM"       = c("Sham_WB", "Sham_BM"),
+  "SHAM_WB_vs_UT_WB"         = c("Sham_WB", "UT_WB"),
+  "SHAM_WB_vs_UT_BM"         = c("Sham_WB", "UT_BM"),
+  "SHAM_BM_vs_UT_WB"         = c("Sham_BM", "UT_WB"),
+  "SHAM_BM_vs_UT_BM"         = c("Sham_BM", "UT_BM"),
+  "UT_WB_vs_UT_BM"           = c("UT_WB", "UT_BM")
+)
+
+# Initialize list to store results for FDR calculation
+all_pvalues <- numeric(length(pairwise_comparisons))
+results_list <- list()
+
+# Create workbook
+wb <- createWorkbook()
+
+# Loop through each pairwise comparison
+for (i in seq_along(pairwise_comparisons)) {
+  comparison_name <- names(pairwise_comparisons)[i]
+  groups <- pairwise_comparisons[[i]]
+  group1 <- groups[1]
+  group2 <- groups[2]
+  
+  cat("Processing comparison:", comparison_name, "\n")
+  
+  # Extract expression data for the gene of interest
+  gene_expression <- FetchData(seu_T, vars = gene_of_interest, layer = "data")
+  
+  # Get sample names from metadata
+  sample_names <- seu_T@meta.data$sample_name
+  
+  # Extract expression values for each group
+  group1_cells <- which(sample_names == group1)
+  group2_cells <- which(sample_names == group2)
+  
+  group1_expression <- gene_expression[group1_cells, gene_of_interest]
+  group2_expression <- gene_expression[group2_cells, gene_of_interest]
+  
+  # Check if both groups have data
+  if (length(group1_expression) == 0 || length(group2_expression) == 0) {
+    cat("Warning: No cells found for one or both groups in", comparison_name, "\n")
+    next
+  }
+  
+  # Perform Welch's t-test
+  t_test_result <- t.test(group1_expression, group2_expression, var.equal = FALSE)
+  
+  # Calculate means
+  mean_group1 <- mean(group1_expression, na.rm = TRUE)
+  mean_group2 <- mean(group2_expression, na.rm = TRUE)
+  
+  # Calculate log2 fold change (group1 - group2)
+  log2_fc <- mean_group1 - mean_group2
+  
+  # Extract results
+  t_statistic <- t_test_result$statistic
+  df <- t_test_result$parameter
+  p_value <- t_test_result$p.value
+  conf_int_lower <- t_test_result$conf.int[1]
+  conf_int_upper <- t_test_result$conf.int[2]
+  
+  # Store p-value for FDR calculation
+  all_pvalues[i] <- p_value
+  
+  # Create results data frame
+  results_df <- data.frame(
+    Gene = gene_of_interest,
+    Comparison = comparison_name,
+    Group1 = group1,
+    Group2 = group2,
+    N_Group1 = length(group1_expression),
+    N_Group2 = length(group2_expression),
+    Mean_Group1 = mean_group1,
+    Mean_Group2 = mean_group2,
+    Log2_Fold_Change = log2_fc,
+    t_Statistic = as.numeric(t_statistic),
+    Degrees_of_Freedom = as.numeric(df),
+    P_Value = p_value,
+    Conf_Int_Lower = conf_int_lower,
+    Conf_Int_Upper = conf_int_upper,
+    stringsAsFactors = FALSE
+  )
+  
+  # Store results for later FDR adjustment
+  results_list[[i]] <- results_df
+  
+  # Add worksheet to workbook
+  addWorksheet(wb, sheetName = comparison_name)
+  writeData(wb, sheet = comparison_name, x = results_df)
+}
+
+# Calculate FDR-adjusted p-values
+fdr_adjusted <- p.adjust(all_pvalues, method = "fdr")
+
+# Add FDR-adjusted p-values to each worksheet
+for (i in seq_along(results_list)) {
+  if (!is.null(results_list[[i]])) {
+    comparison_name <- names(pairwise_comparisons)[i]
+    
+    # Add FDR column to existing data
+    results_list[[i]]$FDR_Adjusted_P_Value <- fdr_adjusted[i]
+    
+    # Clear and rewrite the worksheet with updated data
+    removeWorksheet(wb, comparison_name)
+    addWorksheet(wb, sheetName = comparison_name)
+    writeData(wb, sheet = comparison_name, x = results_list[[i]])
+    
+    # Print summary for this comparison
+    cat("\n", comparison_name, ":\n")
+    cat("  t =", round(results_list[[i]]$t_Statistic, 4), "\n")
+    cat("  df =", round(results_list[[i]]$Degrees_of_Freedom, 2), "\n")
+    cat("  p-value =", format(results_list[[i]]$P_Value, scientific = TRUE), "\n")
+    cat("  FDR p-value =", format(results_list[[i]]$FDR_Adjusted_P_Value, scientific = TRUE), "\n")
+    cat("  95% CI: [", round(results_list[[i]]$Conf_Int_Lower, 4), ", ", 
+        round(results_list[[i]]$Conf_Int_Upper, 4), "]\n")
+    cat("  Log2 FC =", round(results_list[[i]]$Log2_Fold_Change, 4), "\n")
+  }
+}
+
+# Save the workbook
+output_path <- here("R Projects", "2107", "output", "de_analysis", "t.test", paste0(gene_of_interest, ".xlsx"))
+
+# Create directory if it doesn't exist
+dir.create(dirname(output_path), recursive = TRUE, showWarnings = FALSE)
+
+# Save workbook
+saveWorkbook(wb, file = output_path, overwrite = TRUE)
+```
