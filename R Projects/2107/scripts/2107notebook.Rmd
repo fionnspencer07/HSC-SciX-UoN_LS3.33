@@ -121,19 +121,21 @@ Use either base or Biogenerics
 ##### Biogenerics
 
 ```{r}
-saveRDS(seu_NKT_focused, file = here("Data", "seu_NKT_focused") )
+BiocGenerics::saveRDS(seu_NKT_focused, file = here("Data", "seu_NKT_focused.rds"))
 ```
+
+OR
 
 ##### Base
 
 ```{r}
-base::saveRDS(seu_NKT_focused, file = here("Data", "seu_NKT_focused") )
+base::saveRDS(seu_NKT_focused, file = here("Data", "seu_NKT_focused.rds") )
 ```
 
 #### Load RDS
 
 ```{r}
-seu_NKT_focused <- readRDS(here("Data", "seu_NKT_focused.RDS"))
+seu_NKT_focused <- readRDS(here("Data", "seu_NKT_focused.rds"))
 ```
 
 # Differential Gene Expression Analysis
@@ -144,58 +146,9 @@ seu_NKT_focused <- readRDS(here("Data", "seu_NKT_focused.RDS"))
 seu_T <- subset(seu_NKT_focused, subset = T_clusters %in% "T_cells")
 ```
 
-### (Seurat::Find Markers:wilcox Limma)
-
-```{r}
-# Define the gene list you want to focus on
-selected_genes <- c("S1pr1", "S1pr2", "S1pr3", "S1pr4", "S1pr5", 
-                    "Ccr7", "Sell", "Cd69", "Klf2", "Cxcr4", "Cd44", "Itgae", "Itgal")
-
-pairwise_comparisons <- list(
-  "NAIVE_WB_vs_NAIVE_BM"     = c("Naive_WB", "Naive_BM"),
-  "NAIVE_WB_vs_SHAM_WB"      = c("Naive_WB", "Sham_WB"),
-  "NAIVE_WB_vs_SHAM_BM"      = c("Naive_WB", "Sham_BM"),
-  "NAIVE_WB_vs_UT_WB"        = c("Naive_WB", "UT_WB"),
-  "NAIVE_WB_vs_UT_BM"        = c("Naive_WB", "UT_BM"),
-  "NAIVE_BM_vs_SHAM_WB"      = c("Naive_BM", "Sham_WB"),
-  "NAIVE_BM_vs_SHAM_BM"      = c("Naive_BM", "Sham_BM"),
-  "NAIVE_BM_vs_UT_WB"        = c("Naive_BM", "UT_WB"),
-  "NAIVE_BM_vs_UT_BM"        = c("Naive_BM", "UT_BM"),
-  "SHAM_WB_vs_SHAM_BM"       = c("Sham_WB", "Sham_BM"),
-  "SHAM_WB_vs_UT_WB"         = c("Sham_WB", "UT_WB"),
-  "SHAM_WB_vs_UT_BM"         = c("Sham_WB", "UT_BM"),
-  "SHAM_BM_vs_UT_WB"         = c("Sham_BM", "UT_WB"),
-  "SHAM_BM_vs_UT_BM"         = c("Sham_BM", "UT_BM"),
-  "UT_WB_vs_UT_BM"           = c("UT_WB", "UT_BM")
-)
-
-wb <- createWorkbook()
-
-for (i in names(pairwise_comparisons)) {
-  
-  deg_T <- FindMarkers(seu_T, group.by = "sample_name", ident.1 = pairwise_comparisons[[i]][1], ident.2 = pairwise_comparisons[[i]][2], test.use = "wilcox_limma")
-  
-  addWorksheet(wb, sheetName = i)
-  
-  deg_T <- deg_T %>%
-    filter(rownames(.) %in% selected_genes) %>%   # <- Filter only your selected genes
-    arrange(-avg_log2FC)
-  
-  # Add gene names as a column
-  deg_T$gene <- rownames(deg_T)
-  deg_T <- deg_T %>% select(gene, everything())
-  
-  writeData(wb, sheet = i, x = deg_T)
-}
-
-saveWorkbook(wb, here("R Projects", "2107", "output", "de_analysis", "DE_wilcox-limma_filtered.xlsx"), overwrite = TRUE)
-
-```
-
 ### (Presto) Wilcoxon signed-rank test
 
 ```{r}
-
 # Define the gene list you want to focus on
 selected_genes <- c("S1pr1", "S1pr2", "S1pr3", "S1pr4", "S1pr5", 
                     "Ccr7", "Sell", "Cd69", "Klf2", "Cxcr4", "Cd44", "Itgae", "Itgal")
@@ -283,6 +236,53 @@ for (i in names(pairwise_comparisons)) {
 }
 
 saveWorkbook(wb, here("R Projects", "2107", "output", "de_analysis", "DE_wilcox-presto(seurat)_filtered.xlsx"), overwrite = TRUE)
+```
+
+###  Wilcoxon Limma Find Markers
+
+```{r}
+# Define the gene list you want to focus on
+selected_genes <- c("S1pr1", "S1pr2", "S1pr3", "S1pr4", "S1pr5", 
+                    "Ccr7", "Sell", "Cd69", "Klf2", "Cxcr4", "Cd44", "Itgae", "Itgal")
+
+pairwise_comparisons <- list(
+  "NAIVE_WB_vs_NAIVE_BM"     = c("Naive_WB", "Naive_BM"),
+  "NAIVE_WB_vs_SHAM_WB"      = c("Naive_WB", "Sham_WB"),
+  "NAIVE_WB_vs_SHAM_BM"      = c("Naive_WB", "Sham_BM"),
+  "NAIVE_WB_vs_UT_WB"        = c("Naive_WB", "UT_WB"),
+  "NAIVE_WB_vs_UT_BM"        = c("Naive_WB", "UT_BM"),
+  "NAIVE_BM_vs_SHAM_WB"      = c("Naive_BM", "Sham_WB"),
+  "NAIVE_BM_vs_SHAM_BM"      = c("Naive_BM", "Sham_BM"),
+  "NAIVE_BM_vs_UT_WB"        = c("Naive_BM", "UT_WB"),
+  "NAIVE_BM_vs_UT_BM"        = c("Naive_BM", "UT_BM"),
+  "SHAM_WB_vs_SHAM_BM"       = c("Sham_WB", "Sham_BM"),
+  "SHAM_WB_vs_UT_WB"         = c("Sham_WB", "UT_WB"),
+  "SHAM_WB_vs_UT_BM"         = c("Sham_WB", "UT_BM"),
+  "SHAM_BM_vs_UT_WB"         = c("Sham_BM", "UT_WB"),
+  "SHAM_BM_vs_UT_BM"         = c("Sham_BM", "UT_BM"),
+  "UT_WB_vs_UT_BM"           = c("UT_WB", "UT_BM")
+)
+
+wb <- createWorkbook()
+
+for (i in names(pairwise_comparisons)) {
+  
+  deg_T <- FindMarkers(seu_T, group.by = "sample_name", ident.1 = pairwise_comparisons[[i]][1], ident.2 = pairwise_comparisons[[i]][2], test.use = "wilcox_limma")
+  
+  addWorksheet(wb, sheetName = i)
+  
+  deg_T <- deg_T %>%
+    filter(rownames(.) %in% selected_genes) %>%   # <- Filter only your selected genes
+    arrange(-avg_log2FC)
+  
+  # Add gene names as a column
+  deg_T$gene <- rownames(deg_T)
+  deg_T <- deg_T %>% select(gene, everything())
+  
+  writeData(wb, sheet = i, x = deg_T)
+}
+
+saveWorkbook(wb, here("R Projects", "2107", "output", "de_analysis", "DE_wilcox-limma_filtered.xlsx"), overwrite = TRUE)
 
 ```
 
