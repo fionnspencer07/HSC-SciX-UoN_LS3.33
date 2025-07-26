@@ -26,6 +26,10 @@ library(here)
 
 # Set Up Working Environment
 
+```{r}
+set.seed(47)
+```
+
 ## Load Packages & Functions
 
 ```{r}
