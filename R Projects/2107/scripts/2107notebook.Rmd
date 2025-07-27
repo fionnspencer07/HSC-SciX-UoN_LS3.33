@@ -37,7 +37,9 @@ library(here)
 ## Set Seed
 
 ```{r}
-set.seed(210825)
+seed <- "210825"
+set.seed(seed)
+message("seed has been set to 210825 ")
 ```
 
 ## Load Packages & Functions
@@ -2390,3 +2392,17 @@ dir.create(dirname(output_path), recursive = TRUE, showWarnings = FALSE)
 # Save workbook
 saveWorkbook(wb, file = output_path, overwrite = TRUE)
 ```
+
+# Visualisation
+
+## T Cells
+
+### Volcano Plots
+
+### Box Plots
+
+### Violin Plots
+
+### Nebulosa
+
+### Heatmaps
