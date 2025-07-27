@@ -1,0 +1,1078 @@
+---
+output: 
+  html_document: 
+    output_dir: here::here("R Projects", "2107claude", "output", "rmd_outs" )
+    keep_md: true
+---
+
+```{r}
+library(here) 
+
+# Set global knitr chunk options
+knitr::opts_chunk$set(
+    error     = TRUE,        # Ensures that error messages are being shown in the output
+    fig.align = "center",    # Ensures that all figures are aligned to the centre in the output
+    message   = TRUE,       # <--- Recommend FALSE for cleaner reports, set to TRUE for development
+    warning   = TRUE,       # <--- Recommend FALSE for cleaner reports, set to TRUE for development
+    autodep   = TRUE,        # Automatically detects dependencies for caching
+    cache     = TRUE,        # <--- IMPORTANT: Enable caching globally here!
+    results   = "markup",    # Displays the output as normal formatted text
+    echo      = TRUE,        # Ensures that the R code itself is displayed in the document
+    dev       = "svg",       # Graphics output will be in Scalable Vector Graphics (SVG) format
+    out.width = "90%",       # Sets the width of the output image or plot to 90% of the available width 
+    out.extra = "keepaspectratio=true" # Adds extra options to the output, preserving aspect ratio
+)
+
+# Set global option for future package (important for large parallel computations like Seurat/MAST)
+mib <- 9000*1024^2 # 9GB in bytes
+options(future.globals.maxSize = mib) 
+```
+
+```{r}
+library(here)
+```
+
+# Set Up Working Environment
+
+## Set Seed
+
+```{r}
+seed <- "210825"
+set.seed(seed)
+message("seed has been set to 210825 ")
+```
+
+## Load Packages & Functions
+
+```{r}
+source(here("Custom R Functions and Scripts", "init_packages.R"))
+```
+
+# Configuration
+
+## Custom Colours
+
+```{r}
+# Custom colors
+man_cols <- c("#86b0cc",  "#f3e65d", "#d5c1e7", "#eeb84c", "#82c39e", "#525252","#4d9f6b", "#b3939e", "#e76031", "#e9944b")
+names(man_cols) <- c("B_cells", "NK_cells", "monocytes", "T_cells", "neutrophils", "megakaryocytes", "pDCs",
+                     "plasma_cells", "progenitor_cells", "NKT_cells")
+```
+
+## Output Folders
+
+### Primary
+
+```{r}
+dir.create(here("R Projects", "2107claude", "output"), recursive = TRUE, showWarnings = FALSE)
+```
+
+### DGE
+
+```{r}
+dir.create(here("R Projects", "2107claude", "output", "de_analysis", "Find Markers"), recursive = TRUE, showWarnings = FALSE)
+dir.create(here("R Projects", "2107claude", "output", "de_analysis", "Presto"), recursive = TRUE, showWarnings = FALSE)
+dir.create(here("R Projects", "2107claude", "output", "de_analysis", "t.test"), recursive = TRUE, showWarnings = FALSE)
+```
+
+### Visualisation
+
+```{r}
+dir.create(here("R Projects", "2107claude", "output", "visualisation", "box plots"), recursive = TRUE, showWarnings = FALSE)
+dir.create(here("R Projects", "2107claude", "output", "visualisation", "complex heatmaps"), recursive = TRUE, showWarnings = FALSE)
+dir.create(here("R Projects", "2107claude", "output", "visualisation", "nebulosa"), recursive = TRUE, showWarnings = FALSE)
+dir.create(here("R Projects", "2107claude", "output", "visualisation", "violin plots"), recursive = TRUE, showWarnings = FALSE)
+dir.create(here("R Projects", "2107claude", "output", "visualisation", "volcano"), recursive = TRUE, showWarnings = FALSE)
+```
+
+# Import & Pre-processing of Data
+
+## Load RDS file
+
+### Load Original RDS
+
+Importing PhD Clara Savary's RDS & Initialising the object as a Seurat Object
+
+```{r, eval=FALSE}
+
+seu <- readRDS(here("Data",          "seu_NKT_blood_mouse_PPK_ONC_harmony_integrated_filtered_v2_20231_20236_annot.rds"))
+```
+
+### Subset
+
+Initial Subset to isolate T Cells, Natural Killer T Cells and Natural Killer Cells and label
+
+```{r, eval=FALSE}
+seu_NKT <- subset(seu, subset = cell_types %in% c("T_cells", "NK_cells", "NKT_cells"))
+```
+
+### Subset Dataset Again
+
+Second Subset -\> subsetting to remove treatment conditions involving theraputics as this is outside the bounds of the scope of the investigation.
+
+Including:
+
+-   DMG Mice (represented as untreated or UT)
+
+-   Control: No Cancer (Treatment and Disease Naive Group)
+
+-   Surgery Control (SHAM - Injected with Saline - to make sure that the stress of surgery isn't a factor and can be compared between Naive, UT and Sham)
+
+Excluding:
+
+-   ONC201 - Dordaviprone -\> DRD2 antagonist and ClpP agonist
+
+    -   <https://doi.org/10.1158/0008-5472.CAN-23-0186>
+
+    -   <https://doi.org/10.1158/2159-8290.CD-23-0131>
+
+-   Dex - Dexmethasone -\> Corticosteroid
+
+-   Dex & ONC201 Combo
+
+```{r, eval=FALSE}
+seu_NKT_focused <- subset(seu_NKT, subset = treatment %in% c("UT", "NAIVE", "SHAM"))
+```
+
+For later scripting - load seu_NKT_focused
+
+#### Export
+
+Use either base or BioCgenerics
+
+##### BioCgenerics
+
+```{r,eval=FALSE}
+BiocGenerics::saveRDS(seu_NKT_focused, file = here("Data", "seu_NKT_focused.rds"))
+```
+
+OR
+
+##### Base
+
+```{r, , eval=FALSE}
+base::saveRDS(seu_NKT_focused, file = here("Data", "seu_NKT_focused.rds") )
+```
+
+#### Load RDS
+
+```{r, cache=FALSE}
+seu_NKT_focused <- readRDS(here("Data", "seu_NKT_focused.rds"))
+```
+
+# Differential Gene Expression Analysis
+
+## T Cells
+
+```{r, cache=FALSE}
+seu_T <- subset(seu_NKT_focused, subset = T_clusters %in% "T_cells")
+```
+
+### Presto
+
+#### Wilcoxon signed-rank test
+
+```{r, cache=TRUE}
+# Define the gene list you want to focus on
+selected_genes <- c("S1pr1", "S1pr2", "S1pr3", "S1pr4", "S1pr5", 
+                    "Ccr7", "Sell", "Cd69", "Klf2", "Cxcr4", "Cd44", "Itgae", "Itgal")
+
+pairwise_comparisons <- list(
+  "NAIVE_WB_vs_NAIVE_BM"     = c("Naive_WB", "Naive_BM"),
+  "NAIVE_WB_vs_SHAM_WB"      = c("Naive_WB", "Sham_WB"),
+  "NAIVE_WB_vs_SHAM_BM"      = c("Naive_WB", "Sham_BM"),
+  "NAIVE_WB_vs_UT_WB"        = c("Naive_WB", "UT_WB"),
+  "NAIVE_WB_vs_UT_BM"        = c("Naive_WB", "UT_BM"),
+  "NAIVE_BM_vs_SHAM_WB"      = c("Naive_BM", "Sham_WB"),
+  "NAIVE_BM_vs_SHAM_BM"      = c("Naive_BM", "Sham_BM"),
+  "NAIVE_BM_vs_UT_WB"        = c("Naive_BM", "UT_WB"),
+  "NAIVE_BM_vs_UT_BM"        = c("Naive_BM", "UT_BM"),
+  "SHAM_WB_vs_SHAM_BM"       = c("Sham_WB", "Sham_BM"),
+  "SHAM_WB_vs_UT_WB"         = c("Sham_WB", "UT_WB"),
+  "SHAM_WB_vs_UT_BM"         = c("Sham_WB", "UT_BM"),
+  "SHAM_BM_vs_UT_WB"         = c("Sham_BM", "UT_WB"),
+  "SHAM_BM_vs_UT_BM"         = c("Sham_BM", "UT_BM"),
+  "UT_WB_vs_UT_BM"           = c("UT_WB", "UT_BM")
+)
+
+wb <- createWorkbook()
+
+for (i in names(pairwise_comparisons)) {
+  
+  deg_T <- wilcoxauc(seu_T, group_by = "sample_name", groups_use = pairwise_comparisons[[i]])
+  
+  addWorksheet(wb, sheetName = i)
+  
+  deg_T <- deg_T %>%
+    filter(group == pairwise_comparisons[[i]][[1]]) %>%
+    filter(feature %in% selected_genes) %>%   # <- Filter only your selected genes
+    arrange(group, -logFC)
+  
+  writeData(wb, sheet = i, x = deg_T)
+}
+
+saveWorkbook(wb, here("R Projects", "2107claude", "output", "de_analysis", "Presto", "DE_presto-wilcoxauc_filtered.xlsx"), overwrite = TRUE)
+
+```
+
+### Find Markers
+
+#### Wilcox Presto
+
+```{r, eval=TRUE, cache=TRUE}
+# Define the gene list you want to focus on
+selected_genes <- c("S1pr1", "S1pr2", "S1pr3", "S1pr4", "S1pr5", 
+                    "Ccr7", "Sell", "Cd69", "Klf2", "Cxcr4", "Cd44", "Itgae", "Itgal")
+
+pairwise_comparisons <- list(
+  "NAIVE_WB_vs_NAIVE_BM"     = c("Naive_WB", "Naive_BM"),
+  "NAIVE_WB_vs_SHAM_WB"      = c("Naive_WB", "Sham_WB"),
+  "NAIVE_WB_vs_SHAM_BM"      = c("Naive_WB", "Sham_BM"),
+  "NAIVE_WB_vs_UT_WB"        = c("Naive_WB", "UT_WB"),
+  "NAIVE_WB_vs_UT_BM"        = c("Naive_WB", "UT_BM"),
+  "NAIVE_BM_vs_SHAM_WB"      = c("Naive_BM", "Sham_WB"),
+  "NAIVE_BM_vs_SHAM_BM"      = c("Naive_BM", "Sham_BM"),
+  "NAIVE_BM_vs_UT_WB"        = c("Naive_BM", "UT_WB"),
+  "NAIVE_BM_vs_UT_BM"        = c("Naive_BM", "UT_BM"),
+  "SHAM_WB_vs_SHAM_BM"       = c("Sham_WB", "Sham_BM"),
+  "SHAM_WB_vs_UT_WB"         = c("Sham_WB", "UT_WB"),
+  "SHAM_WB_vs_UT_BM"         = c("Sham_WB", "UT_BM"),
+  "SHAM_BM_vs_UT_WB"         = c("Sham_BM", "UT_WB"),
+  "SHAM_BM_vs_UT_BM"         = c("Sham_BM", "UT_BM"),
+  "UT_WB_vs_UT_BM"           = c("UT_WB", "UT_BM")
+)
+
+wb <- createWorkbook()
+
+for (i in names(pairwise_comparisons)) {
+  
+  deg_T <- FindMarkers(seu_T, group.by = "sample_name", ident.1 = pairwise_comparisons[[i]][1], ident.2 = pairwise_comparisons[[i]][2], test.use = "wilcox")
+  
+  addWorksheet(wb, sheetName = i)
+  
+  deg_T <- deg_T %>%
+    filter(rownames(.) %in% selected_genes) %>%   # <- Filter only your selected genes
+    arrange(-avg_log2FC)
+  
+  # Add gene names as a column
+  deg_T$gene <- rownames(deg_T)
+  deg_T <- deg_T %>% dplyr::select(gene, dplyr::everything())
+  
+  writeData(wb, sheet = i, x = deg_T)
+}
+
+saveWorkbook(wb, here("R Projects", "2107claude", "output", "de_analysis", "Find Markers", "DE_wilcox_filtered.xlsx"), overwrite = TRUE)
+```
+
+#### Wilcoxon Limma
+
+```{r, cache=TRUE}
+# Define the gene list you want to focus on
+selected_genes <- c("S1pr1", "S1pr2", "S1pr3", "S1pr4", "S1pr5", 
+                    "Ccr7", "Sell", "Cd69", "Klf2", "Cxcr4", "Cd44", "Itgae", "Itgal")
+
+pairwise_comparisons <- list(
+  "NAIVE_WB_vs_NAIVE_BM"     = c("Naive_WB", "Naive_BM"),
+  "NAIVE_WB_vs_SHAM_WB"      = c("Naive_WB", "Sham_WB"),
+  "NAIVE_WB_vs_SHAM_BM"      = c("Naive_WB", "Sham_BM"),
+  "NAIVE_WB_vs_UT_WB"        = c("Naive_WB", "UT_WB"),
+  "NAIVE_WB_vs_UT_BM"        = c("Naive_WB", "UT_BM"),
+  "NAIVE_BM_vs_SHAM_WB"      = c("Naive_BM", "Sham_WB"),
+  "NAIVE_BM_vs_SHAM_BM"      = c("Naive_BM", "Sham_BM"),
+  "NAIVE_BM_vs_UT_WB"        = c("Naive_BM", "UT_WB"),
+  "NAIVE_BM_vs_UT_BM"        = c("Naive_BM", "UT_BM"),
+  "SHAM_WB_vs_SHAM_BM"       = c("Sham_WB", "Sham_BM"),
+  "SHAM_WB_vs_UT_WB"         = c("Sham_WB", "UT_WB"),
+  "SHAM_WB_vs_UT_BM"         = c("Sham_WB", "UT_BM"),
+  "SHAM_BM_vs_UT_WB"         = c("Sham_BM", "UT_WB"),
+  "SHAM_BM_vs_UT_BM"         = c("Sham_BM", "UT_BM"),
+  "UT_WB_vs_UT_BM"           = c("UT_WB", "UT_BM")
+)
+
+wb <- createWorkbook()
+
+for (i in names(pairwise_comparisons)) {
+  
+  deg_T <- FindMarkers(seu_T, group.by = "sample_name", ident.1 = pairwise_comparisons[[i]][1], ident.2 = pairwise_comparisons[[i]][2], test.use = "wilcox_limma")
+  
+  addWorksheet(wb, sheetName = i)
+  
+  deg_T <- deg_T %>%
+    filter(rownames(.) %in% selected_genes) %>%   # <- Filter only your selected genes
+    arrange(-avg_log2FC)
+  
+  # Add gene names as a column
+  deg_T$gene <- rownames(deg_T)
+  deg_T <- deg_T %>% dplyr::select(gene, dplyr::everything())
+  
+  writeData(wb, sheet = i, x = deg_T)
+}
+
+saveWorkbook(wb, here("R Projects", "2107claude", "output", "de_analysis", "Find Markers", "DE_wilcox-limma_filtered.xlsx"), overwrite = TRUE)
+
+```
+
+#### deseq2
+
+```{r,eval=FALSE, cache=TRUE}
+# Define the gene list you want to focus on
+selected_genes <- c("S1pr1", "S1pr2", "S1pr3", "S1pr4", "S1pr5", 
+                    "Ccr7", "Sell", "Cd69", "Klf2", "Cxcr4", "Cd44", "Itgae", "Itgal")
+
+pairwise_comparisons <- list(
+  "NAIVE_WB_vs_NAIVE_BM"     = c("Naive_WB", "Naive_BM"),
+  "NAIVE_WB_vs_SHAM_WB"      = c("Naive_WB", "Sham_WB"),
+  "NAIVE_WB_vs_SHAM_BM"      = c("Naive_WB", "Sham_BM"),
+  "NAIVE_WB_vs_UT_WB"        = c("Naive_WB", "UT_WB"),
+  "NAIVE_WB_vs_UT_BM"        = c("Naive_WB", "UT_BM"),
+  "NAIVE_BM_vs_SHAM_WB"      = c("Naive_BM", "Sham_WB"),
+  "NAIVE_BM_vs_SHAM_BM"      = c("Naive_BM", "Sham_BM"),
+  "NAIVE_BM_vs_UT_WB"        = c("Naive_BM", "UT_WB"),
+  "NAIVE_BM_vs_UT_BM"        = c("Naive_BM", "UT_BM"),
+  "SHAM_WB_vs_SHAM_BM"       = c("Sham_WB", "Sham_BM"),
+  "SHAM_WB_vs_UT_WB"         = c("Sham_WB", "UT_WB"),
+  "SHAM_WB_vs_UT_BM"         = c("Sham_WB", "UT_BM"),
+  "SHAM_BM_vs_UT_WB"         = c("Sham_BM", "UT_WB"),
+  "SHAM_BM_vs_UT_BM"         = c("Sham_BM", "UT_BM"),
+  "UT_WB_vs_UT_BM"           = c("UT_WB", "UT_BM")
+)
+
+wb <- createWorkbook()
+
+for (i in names(pairwise_comparisons)) {
+  
+  deg_T <- FindMarkers(seu_T, group.by = "sample_name", ident.1 = pairwise_comparisons[[i]][1], ident.2 = pairwise_comparisons[[i]][2], test.use = "DESeq2")
+  
+  addWorksheet(wb, sheetName = i)
+  
+  deg_T <- deg_T %>%
+    filter(rownames(.) %in% selected_genes) %>%   # <- Filter only your selected genes
+    arrange(-avg_log2FC)
+  
+  # Add gene names as a column
+  deg_T$gene <- rownames(deg_T)
+  deg_T <- deg_T %>% dplyr::select(gene, dplyr::everything())
+  
+  writeData(wb, sheet = i, x = deg_T)
+}
+
+saveWorkbook(wb, here("R Projects", "2107claude", "output", "de_analysis", "Find Markers", "DE_deseq2_filtered.xlsx"), overwrite = TRUE)
+
+```
+
+#### edgeR - Empirical Methods for DE (Negative Binomial Distribution)
+
+```{r, eval=FALSE, cache=TRUE}
+selected_genes <- c("S1pr1", "S1pr2", "S1pr3", "S1pr4", "S1pr5", 
+                    "Ccr7", "Sell", "Cd69", "Klf2", "Cxcr4", "Cd44", "Itgae", "Itgal")
+
+pairwise_comparisons <- list(
+  "NAIVE_WB_vs_NAIVE_BM"     = c("Naive_WB", "Naive_BM"),
+  "NAIVE_WB_vs_SHAM_WB"      = c("Naive_WB", "Sham_WB"),
+  "NAIVE_WB_vs_SHAM_BM"      = c("Naive_WB", "Sham_BM"),
+  "NAIVE_WB_vs_UT_WB"        = c("Naive_WB", "UT_WB"),
+  "NAIVE_WB_vs_UT_BM"        = c("Naive_WB", "UT_BM"),
+  "NAIVE_BM_vs_SHAM_WB"      = c("Naive_BM", "Sham_WB"),
+  "NAIVE_BM_vs_SHAM_BM"      = c("Naive_BM", "Sham_BM"),
+  "NAIVE_BM_vs_UT_WB"        = c("Naive_BM", "UT_WB"),
+  "NAIVE_BM_vs_UT_BM"        = c("Naive_BM", "UT_BM"),
+  "SHAM_WB_vs_SHAM_BM"       = c("Sham_WB", "Sham_BM"),
+  "SHAM_WB_vs_UT_WB"         = c("Sham_WB", "UT_WB"),
+  "SHAM_WB_vs_UT_BM"         = c("Sham_WB", "UT_BM"),
+  "SHAM_BM_vs_UT_WB"         = c("Sham_BM", "UT_WB"),
+  "SHAM_BM_vs_UT_BM"         = c("Sham_BM", "UT_BM"),
+  "UT_WB_vs_UT_BM"           = c("UT_WB", "UT_BM")
+)
+
+wb <- createWorkbook()
+
+for (i in names(pairwise_comparisons)) {
+  
+  deg_T <- FindMarkers(seu_T, group.by = "sample_name", ident.1 = pairwise_comparisons[[i]][1], ident.2 = pairwise_comparisons[[i]][2], test.use = "edgeR")
+  
+  addWorksheet(wb, sheetName = i)
+  
+  deg_T <- deg_T %>%
+    filter(rownames(.) %in% selected_genes) %>%   # <- Filter only your selected genes
+    arrange(-avg_log2FC)
+  
+  # Add gene names as a column
+  deg_T$gene <- rownames(deg_T)
+  deg_T <- deg_T %>% dplyr::select(gene, dplyr::everything())
+  
+  writeData(wb, sheet = i, x = deg_T)
+}
+
+saveWorkbook(wb, here("R Projects", "2107claude", "output", "de_analysis", "Find Markers", "DE_edgeR_filtered.xlsx"), overwrite = TRUE)
+
+
+```
+
+#### MAST
+
+```{r, eval=TRUE, cache=TRUE}
+# Define the gene list you want to focus on
+selected_genes <- c("S1pr1", "S1pr2", "S1pr3", "S1pr4", "S1pr5", 
+                    "Ccr7", "Sell", "Cd69", "Klf2", "Cxcr4", "Cd44", "Itgae", "Itgal")
+
+pairwise_comparisons <- list(
+  "NAIVE_WB_vs_NAIVE_BM"     = c("Naive_WB", "Naive_BM"),
+  "NAIVE_WB_vs_SHAM_WB"      = c("Naive_WB", "Sham_WB"),
+  "NAIVE_WB_vs_SHAM_BM"      = c("Naive_WB", "Sham_BM"),
+  "NAIVE_WB_vs_UT_WB"        = c("Naive_WB", "UT_WB"),
+  "NAIVE_WB_vs_UT_BM"        = c("Naive_WB", "UT_BM"),
+  "NAIVE_BM_vs_SHAM_WB"      = c("Naive_BM", "Sham_WB"),
+  "NAIVE_BM_vs_SHAM_BM"      = c("Naive_BM", "Sham_BM"),
+  "NAIVE_BM_vs_UT_WB"        = c("Naive_BM", "UT_WB"),
+  "NAIVE_BM_vs_UT_BM"        = c("Naive_BM", "UT_BM"),
+  "SHAM_WB_vs_SHAM_BM"       = c("Sham_WB", "Sham_BM"),
+  "SHAM_WB_vs_UT_WB"         = c("Sham_WB", "UT_WB"),
+  "SHAM_WB_vs_UT_BM"         = c("Sham_WB", "UT_BM"),
+  "SHAM_BM_vs_UT_WB"         = c("Sham_BM", "UT_WB"),
+  "SHAM_BM_vs_UT_BM"         = c("Sham_BM", "UT_BM"),
+  "UT_WB_vs_UT_BM"           = c("UT_WB", "UT_BM")
+)
+
+wb <- createWorkbook()
+
+for (i in names(pairwise_comparisons)) {
+  
+  deg_T <- FindMarkers(seu_T, group.by = "sample_name", ident.1 = pairwise_comparisons[[i]][1], ident.2 = pairwise_comparisons[[i]][2], test.use = "MAST")
+  
+  addWorksheet(wb, sheetName = i)
+  
+  deg_T <- deg_T %>%
+    filter(rownames(.) %in% selected_genes) %>%   # <- Filter only your selected genes
+    arrange(-avg_log2FC)
+  
+  # Add gene names as a column
+  deg_T$gene <- rownames(deg_T)
+  deg_T <- deg_T %>% dplyr::select(gene, dplyr::everything())
+  
+  writeData(wb, sheet = i, x = deg_T)
+}
+
+saveWorkbook(wb, here("R Projects", "2107claude", "output", "de_analysis", "Find Markers", "DE_MAST_filtered.xlsx"), overwrite = TRUE)
+
+
+```
+
+#### Student's T Test
+
+```{r}
+# Define the gene list you want to focus on
+selected_genes <- c("S1pr1", "S1pr2", "S1pr3", "S1pr4", "S1pr5", 
+                    "Ccr7", "Sell", "Cd69", "Klf2", "Cxcr4", "Cd44", "Itgae", "Itgal")
+
+pairwise_comparisons <- list(
+  "NAIVE_WB_vs_NAIVE_BM"     = c("Naive_WB", "Naive_BM"),
+  "NAIVE_WB_vs_SHAM_WB"      = c("Naive_WB", "Sham_WB"),
+  "NAIVE_WB_vs_SHAM_BM"      = c("Naive_WB", "Sham_BM"),
+  "NAIVE_WB_vs_UT_WB"        = c("Naive_WB", "UT_WB"),
+  "NAIVE_WB_vs_UT_BM"        = c("Naive_WB", "UT_BM"),
+  "NAIVE_BM_vs_SHAM_WB"      = c("Naive_BM", "Sham_WB"),
+  "NAIVE_BM_vs_SHAM_BM"      = c("Naive_BM", "Sham_BM"),
+  "NAIVE_BM_vs_UT_WB"        = c("Naive_BM", "UT_WB"),
+  "NAIVE_BM_vs_UT_BM"        = c("Naive_BM", "UT_BM"),
+  "SHAM_WB_vs_SHAM_BM"       = c("Sham_WB", "Sham_BM"),
+  "SHAM_WB_vs_UT_WB"         = c("Sham_WB", "UT_WB"),
+  "SHAM_WB_vs_UT_BM"         = c("Sham_WB", "UT_BM"),
+  "SHAM_BM_vs_UT_WB"         = c("Sham_BM", "UT_WB"),
+  "SHAM_BM_vs_UT_BM"         = c("Sham_BM", "UT_BM"),
+  "UT_WB_vs_UT_BM"           = c("UT_WB", "UT_BM")
+)
+
+# Create an Excel workbook
+wb <- createWorkbook()
+
+for (i in names(pairwise_comparisons)) {
+  
+  deg_T <- FindMarkers(
+    seu_T,
+    group.by = "sample_name",
+    ident.1 = pairwise_comparisons[[i]][1],
+    ident.2 = pairwise_comparisons[[i]][2],
+    test.use = "t"
+  )
+  
+  addWorksheet(wb, sheetName = i)
+  
+  # Filter for selected genes and sort by log2FC
+  deg_T <- deg_T %>%
+    filter(rownames(.) %in% selected_genes) %>%
+    arrange(-avg_log2FC)
+  
+  # Add gene names as a column and reorder
+  deg_T$gene <- rownames(deg_T)
+  deg_T <- deg_T %>% dplyr::select(gene, dplyr::everything())
+  
+  # Write to Excel sheet
+  writeData(wb, sheet = i, x = deg_T)
+}
+
+# Save the workbook
+saveWorkbook(
+  wb,
+  here("R Projects", "2107claude", "output", "de_analysis", "Find Markers", "DE_t_filtered.xlsx"),
+  overwrite = TRUE
+)
+```
+
+### Welch Two Sample t-test
+
+#### S1pr1
+
+```{r}
+# Define the gene of interest
+gene_of_interest <- "S1pr1"
+
+# Define pairwise comparisons
+pairwise_comparisons <- list(
+  "NAIVE_WB_vs_NAIVE_BM"     = c("Naive_WB", "Naive_BM"),
+  "NAIVE_WB_vs_SHAM_WB"      = c("Naive_WB", "Sham_WB"),
+  "NAIVE_WB_vs_SHAM_BM"      = c("Naive_WB", "Sham_BM"),
+  "NAIVE_WB_vs_UT_WB"        = c("Naive_WB", "UT_WB"),
+  "NAIVE_WB_vs_UT_BM"        = c("Naive_WB", "UT_BM"),
+  "NAIVE_BM_vs_SHAM_WB"      = c("Naive_BM", "Sham_WB"),
+  "NAIVE_BM_vs_SHAM_BM"      = c("Naive_BM", "Sham_BM"),
+  "NAIVE_BM_vs_UT_WB"        = c("Naive_BM", "UT_WB"),
+  "NAIVE_BM_vs_UT_BM"        = c("Naive_BM", "UT_BM"),
+  "SHAM_WB_vs_SHAM_BM"       = c("Sham_WB", "Sham_BM"),
+  "SHAM_WB_vs_UT_WB"         = c("Sham_WB", "UT_WB"),
+  "SHAM_WB_vs_UT_BM"         = c("Sham_WB", "UT_BM"),
+  "SHAM_BM_vs_UT_WB"         = c("Sham_BM", "UT_WB"),
+  "SHAM_BM_vs_UT_BM"         = c("Sham_BM", "UT_BM"),
+  "UT_WB_vs_UT_BM"           = c("UT_WB", "UT_BM")
+)
+
+# Initialize list to store results for FDR calculation
+all_pvalues <- numeric(length(pairwise_comparisons))
+results_list <- list()
+
+# Create workbook
+wb <- createWorkbook()
+
+# Loop through each pairwise comparison
+for (i in seq_along(pairwise_comparisons)) {
+  comparison_name <- names(pairwise_comparisons)[i]
+  groups <- pairwise_comparisons[[i]]
+  group1 <- groups[1]
+  group2 <- groups[2]
+  
+  cat("Processing comparison:", comparison_name, "\n")
+  
+  # Extract expression data for the gene of interest
+  gene_expression <- FetchData(seu_T, vars = gene_of_interest, layer = "data")
+  
+  # Get sample names from metadata
+  sample_names <- seu_T@meta.data$sample_name
+  
+  # Extract expression values for each group
+  group1_cells <- which(sample_names == group1)
+  group2_cells <- which(sample_names == group2)
+  
+  group1_expression <- gene_expression[group1_cells, gene_of_interest]
+  group2_expression <- gene_expression[group2_cells, gene_of_interest]
+  
+  # Check if both groups have data
+  if (length(group1_expression) == 0 || length(group2_expression) == 0) {
+    cat("Warning: No cells found for one or both groups in", comparison_name, "\n")
+    next
+  }
+  
+  # Perform Welch's t-test
+  t_test_result <- t.test(group1_expression, group2_expression, var.equal = FALSE)
+  
+  # Calculate means
+  mean_group1 <- mean(group1_expression, na.rm = TRUE)
+  mean_group2 <- mean(group2_expression, na.rm = TRUE)
+  
+  # Calculate log2 fold change (group1 - group2)
+  log2_fc <- mean_group1 - mean_group2
+  
+  # Extract results
+  t_statistic <- t_test_result$statistic
+  df <- t_test_result$parameter
+  p_value <- t_test_result$p.value
+  conf_int_lower <- t_test_result$conf.int[1]
+  conf_int_upper <- t_test_result$conf.int[2]
+  
+  # Store p-value for FDR calculation
+  all_pvalues[i] <- p_value
+  
+  # Create results data frame
+  results_df <- data.frame(
+    Gene = gene_of_interest,
+    Comparison = comparison_name,
+    Group1 = group1,
+    Group2 = group2,
+    N_Group1 = length(group1_expression),
+    N_Group2 = length(group2_expression),
+    Mean_Group1 = mean_group1,
+    Mean_Group2 = mean_group2,
+    Log2_Fold_Change = log2_fc,
+    t_Statistic = as.numeric(t_statistic),
+    Degrees_of_Freedom = as.numeric(df),
+    P_Value = p_value,
+    Conf_Int_Lower = conf_int_lower,
+    Conf_Int_Upper = conf_int_upper,
+    stringsAsFactors = FALSE
+  )
+  
+  # Store results for later FDR adjustment
+  results_list[[i]] <- results_df
+  
+  # Add worksheet to workbook
+  addWorksheet(wb, sheetName = comparison_name)
+  writeData(wb, sheet = comparison_name, x = results_df)
+}
+
+# Calculate FDR-adjusted p-values
+fdr_adjusted <- p.adjust(all_pvalues, method = "fdr")
+
+# Add FDR-adjusted p-values to each worksheet
+for (i in seq_along(results_list)) {
+  if (!is.null(results_list[[i]])) {
+    comparison_name <- names(pairwise_comparisons)[i]
+    
+    # Add FDR column to existing data
+    results_list[[i]]$FDR_Adjusted_P_Value <- fdr_adjusted[i]
+    
+    # Clear and rewrite the worksheet with updated data
+    removeWorksheet(wb, comparison_name)
+    addWorksheet(wb, sheetName = comparison_name)
+    writeData(wb, sheet = comparison_name, x = results_list[[i]])
+    
+    # Print summary for this comparison
+    cat("\n", comparison_name, ":\n")
+    cat("  t =", round(results_list[[i]]$t_Statistic, 4), "\n")
+    cat("  df =", round(results_list[[i]]$Degrees_of_Freedom, 2), "\n")
+    cat("  p-value =", format(results_list[[i]]$P_Value, scientific = TRUE), "\n")
+    cat("  FDR p-value =", format(results_list[[i]]$FDR_Adjusted_P_Value, scientific = TRUE), "\n")
+    cat("  95% CI: [", round(results_list[[i]]$Conf_Int_Lower, 4), ", ", 
+        round(results_list[[i]]$Conf_Int_Upper, 4), "]\n")
+    cat("  Log2 FC =", round(results_list[[i]]$Log2_Fold_Change, 4), "\n")
+  }
+}
+
+# Save the workbook
+output_path <- here("R Projects", "2107claude", "output", "de_analysis", "t.test", paste0(gene_of_interest, ".xlsx"))
+
+# Create directory if it doesn't exist
+dir.create(dirname(output_path), recursive = TRUE, showWarnings = FALSE)
+
+# Save workbook
+saveWorkbook(wb, file = output_path, overwrite = TRUE)
+```
+
+#### S1pr2
+
+```{r}
+# Define the gene of interest
+gene_of_interest <- "S1pr2"
+
+# Define pairwise comparisons
+pairwise_comparisons <- list(
+  "NAIVE_WB_vs_NAIVE_BM"     = c("Naive_WB", "Naive_BM"),
+  "NAIVE_WB_vs_SHAM_WB"      = c("Naive_WB", "Sham_WB"),
+  "NAIVE_WB_vs_SHAM_BM"      = c("Naive_WB", "Sham_BM"),
+  "NAIVE_WB_vs_UT_WB"        = c("Naive_WB", "UT_WB"),
+  "NAIVE_WB_vs_UT_BM"        = c("Naive_WB", "UT_BM"),
+  "NAIVE_BM_vs_SHAM_WB"      = c("Naive_BM", "Sham_WB"),
+  "NAIVE_BM_vs_SHAM_BM"      = c("Naive_BM", "Sham_BM"),
+  "NAIVE_BM_vs_UT_WB"        = c("Naive_BM", "UT_WB"),
+  "NAIVE_BM_vs_UT_BM"        = c("Naive_BM", "UT_BM"),
+  "SHAM_WB_vs_SHAM_BM"       = c("Sham_WB", "Sham_BM"),
+  "SHAM_WB_vs_UT_WB"         = c("Sham_WB", "UT_WB"),
+  "SHAM_WB_vs_UT_BM"         = c("Sham_WB", "UT_BM"),
+  "SHAM_BM_vs_UT_WB"         = c("Sham_BM", "UT_WB"),
+  "SHAM_BM_vs_UT_BM"         = c("Sham_BM", "UT_BM"),
+  "UT_WB_vs_UT_BM"           = c("UT_WB", "UT_BM")
+)
+
+# Initialize list to store results for FDR calculation
+all_pvalues <- numeric(length(pairwise_comparisons))
+results_list <- list()
+
+# Create workbook
+wb <- createWorkbook()
+
+# Loop through each pairwise comparison
+for (i in seq_along(pairwise_comparisons)) {
+  comparison_name <- names(pairwise_comparisons)[i]
+  groups <- pairwise_comparisons[[i]]
+  group1 <- groups[1]
+  group2 <- groups[2]
+  
+  cat("Processing comparison:", comparison_name, "\n")
+  
+  # Extract expression data for the gene of interest
+  gene_expression <- FetchData(seu_T, vars = gene_of_interest, layer = "data")
+  
+  # Get sample names from metadata
+  sample_names <- seu_T@meta.data$sample_name
+  
+  # Extract expression values for each group
+  group1_cells <- which(sample_names == group1)
+  group2_cells <- which(sample_names == group2)
+  
+  group1_expression <- gene_expression[group1_cells, gene_of_interest]
+  group2_expression <- gene_expression[group2_cells, gene_of_interest]
+  
+  # Check if both groups have data
+  if (length(group1_expression) == 0 || length(group2_expression) == 0) {
+    cat("Warning: No cells found for one or both groups in", comparison_name, "\n")
+    next
+  }
+  
+  # Perform Welch's t-test
+  t_test_result <- t.test(group1_expression, group2_expression, var.equal = FALSE)
+  
+  # Calculate means
+  mean_group1 <- mean(group1_expression, na.rm = TRUE)
+  mean_group2 <- mean(group2_expression, na.rm = TRUE)
+  
+  # Calculate log2 fold change (group1 - group2)
+  log2_fc <- mean_group1 - mean_group2
+  
+  # Extract results
+  t_statistic <- t_test_result$statistic
+  df <- t_test_result$parameter
+  p_value <- t_test_result$p.value
+  conf_int_lower <- t_test_result$conf.int[1]
+  conf_int_upper <- t_test_result$conf.int[2]
+  
+  # Store p-value for FDR calculation
+  all_pvalues[i] <- p_value
+  
+  # Create results data frame
+  results_df <- data.frame(
+    Gene = gene_of_interest,
+    Comparison = comparison_name,
+    Group1 = group1,
+    Group2 = group2,
+    N_Group1 = length(group1_expression),
+    N_Group2 = length(group2_expression),
+    Mean_Group1 = mean_group1,
+    Mean_Group2 = mean_group2,
+    Log2_Fold_Change = log2_fc,
+    t_Statistic = as.numeric(t_statistic),
+    Degrees_of_Freedom = as.numeric(df),
+    P_Value = p_value,
+    Conf_Int_Lower = conf_int_lower,
+    Conf_Int_Upper = conf_int_upper,
+    stringsAsFactors = FALSE
+  )
+  
+  # Store results for later FDR adjustment
+  results_list[[i]] <- results_df
+  
+  # Add worksheet to workbook
+  addWorksheet(wb, sheetName = comparison_name)
+  writeData(wb, sheet = comparison_name, x = results_df)
+}
+
+# Calculate FDR-adjusted p-values
+fdr_adjusted <- p.adjust(all_pvalues, method = "fdr")
+
+# Add FDR-adjusted p-values to each worksheet
+for (i in seq_along(results_list)) {
+  if (!is.null(results_list[[i]])) {
+    comparison_name <- names(pairwise_comparisons)[i]
+    
+    # Add FDR column to existing data
+    results_list[[i]]$FDR_Adjusted_P_Value <- fdr_adjusted[i]
+    
+    # Clear and rewrite the worksheet with updated data
+    removeWorksheet(wb, comparison_name)
+    addWorksheet(wb, sheetName = comparison_name)
+    writeData(wb, sheet = comparison_name, x = results_list[[i]])
+    
+    # Print summary for this comparison
+    cat("\n", comparison_name, ":\n")
+    cat("  t =", round(results_list[[i]]$t_Statistic, 4), "\n")
+    cat("  df =", round(results_list[[i]]$Degrees_of_Freedom, 2), "\n")
+    cat("  p-value =", format(results_list[[i]]$P_Value, scientific = TRUE), "\n")
+    cat("  FDR p-value =", format(results_list[[i]]$FDR_Adjusted_P_Value, scientific = TRUE), "\n")
+    cat("  95% CI: [", round(results_list[[i]]$Conf_Int_Lower, 4), ", ", 
+        round(results_list[[i]]$Conf_Int_Upper, 4), "]\n")
+    cat("  Log2 FC =", round(results_list[[i]]$Log2_Fold_Change, 4), "\n")
+  }
+}
+
+# Save the workbook
+output_path <- here("R Projects", "2107claude", "output", "de_analysis", "t.test", paste0(gene_of_interest, ".xlsx"))
+
+# Create directory if it doesn't exist
+dir.create(dirname(output_path), recursive = TRUE, showWarnings = FALSE)
+
+# Save workbook
+saveWorkbook(wb, file = output_path, overwrite = TRUE)
+```
+
+#### S1pr3
+
+```{r}
+# Define the gene of interest
+gene_of_interest <- "S1pr3"
+
+# Define pairwise comparisons
+pairwise_comparisons <- list(
+  "NAIVE_WB_vs_NAIVE_BM"     = c("Naive_WB", "Naive_BM"),
+  "NAIVE_WB_vs_SHAM_WB"      = c("Naive_WB", "Sham_WB"),
+  "NAIVE_WB_vs_SHAM_BM"      = c("Naive_WB", "Sham_BM"),
+  "NAIVE_WB_vs_UT_WB"        = c("Naive_WB", "UT_WB"),
+  "NAIVE_WB_vs_UT_BM"        = c("Naive_WB", "UT_BM"),
+  "NAIVE_BM_vs_SHAM_WB"      = c("Naive_BM", "Sham_WB"),
+  "NAIVE_BM_vs_SHAM_BM"      = c("Naive_BM", "Sham_BM"),
+  "NAIVE_BM_vs_UT_WB"        = c("Naive_BM", "UT_WB"),
+  "NAIVE_BM_vs_UT_BM"        = c("Naive_BM", "UT_BM"),
+  "SHAM_WB_vs_SHAM_BM"       = c("Sham_WB", "Sham_BM"),
+  "SHAM_WB_vs_UT_WB"         = c("Sham_WB", "UT_WB"),
+  "SHAM_WB_vs_UT_BM"         = c("Sham_WB", "UT_BM"),
+  "SHAM_BM_vs_UT_WB"         = c("Sham_BM", "UT_WB"),
+  "SHAM_BM_vs_UT_BM"         = c("Sham_BM", "UT_BM"),
+  "UT_WB_vs_UT_BM"           = c("UT_WB", "UT_BM")
+)
+
+# Initialize list to store results for FDR calculation
+all_pvalues <- numeric(length(pairwise_comparisons))
+results_list <- list()
+
+# Create workbook
+wb <- createWorkbook()
+
+# Loop through each pairwise comparison
+for (i in seq_along(pairwise_comparisons)) {
+  comparison_name <- names(pairwise_comparisons)[i]
+  groups <- pairwise_comparisons[[i]]
+  group1 <- groups[1]
+  group2 <- groups[2]
+  
+  cat("Processing comparison:", comparison_name, "\n")
+  
+  # Extract expression data for the gene of interest
+  gene_expression <- FetchData(seu_T, vars = gene_of_interest, layer = "data")
+  
+  # Get sample names from metadata
+  sample_names <- seu_T@meta.data$sample_name
+  
+  # Extract expression values for each group
+  group1_cells <- which(sample_names == group1)
+  group2_cells <- which(sample_names == group2)
+  
+  group1_expression <- gene_expression[group1_cells, gene_of_interest]
+  group2_expression <- gene_expression[group2_cells, gene_of_interest]
+  
+  # Check if both groups have data
+  if (length(group1_expression) == 0 || length(group2_expression) == 0) {
+    cat("Warning: No cells found for one or both groups in", comparison_name, "\n")
+    next
+  }
+  
+  # Perform Welch's t-test
+  t_test_result <- t.test(group1_expression, group2_expression, var.equal = FALSE)
+  
+  # Calculate means
+  mean_group1 <- mean(group1_expression, na.rm = TRUE)
+  mean_group2 <- mean(group2_expression, na.rm = TRUE)
+  
+  # Calculate log2 fold change (group1 - group2)
+  log2_fc <- mean_group1 - mean_group2
+  
+  # Extract results
+  t_statistic <- t_test_result$statistic
+  df <- t_test_result$parameter
+  p_value <- t_test_result$p.value
+  conf_int_lower <- t_test_result$conf.int[1]
+  conf_int_upper <- t_test_result$conf.int[2]
+  
+  # Store p-value for FDR calculation
+  all_pvalues[i] <- p_value
+  
+  # Create results data frame
+  results_df <- data.frame(
+    Gene = gene_of_interest,
+    Comparison = comparison_name,
+    Group1 = group1,
+    Group2 = group2,
+    N_Group1 = length(group1_expression),
+    N_Group2 = length(group2_expression),
+    Mean_Group1 = mean_group1,
+    Mean_Group2 = mean_group2,
+    Log2_Fold_Change = log2_fc,
+    t_Statistic = as.numeric(t_statistic),
+    Degrees_of_Freedom = as.numeric(df),
+    P_Value = p_value,
+    Conf_Int_Lower = conf_int_lower,
+    Conf_Int_Upper = conf_int_upper,
+    stringsAsFactors = FALSE
+  )
+  
+  # Store results for later FDR adjustment
+  results_list[[i]] <- results_df
+  
+  # Add worksheet to workbook
+  addWorksheet(wb, sheetName = comparison_name)
+  writeData(wb, sheet = comparison_name, x = results_df)
+}
+
+# Calculate FDR-adjusted p-values
+fdr_adjusted <- p.adjust(all_pvalues, method = "fdr")
+
+# Add FDR-adjusted p-values to each worksheet
+for (i in seq_along(results_list)) {
+  if (!is.null(results_list[[i]])) {
+    comparison_name <- names(pairwise_comparisons)[i]
+    
+    # Add FDR column to existing data
+    results_list[[i]]$FDR_Adjusted_P_Value <- fdr_adjusted[i]
+    
+    # Clear and rewrite the worksheet with updated data
+    removeWorksheet(wb, comparison_name)
+    addWorksheet(wb, sheetName = comparison_name)
+    writeData(wb, sheet = comparison_name, x = results_list[[i]])
+    
+    # Print summary for this comparison
+    cat("\n", comparison_name, ":\n")
+    cat("  t =", round(results_list[[i]]$t_Statistic, 4), "\n")
+    cat("  df =", round(results_list[[i]]$Degrees_of_Freedom, 2), "\n")
+    cat("  p-value =", format(results_list[[i]]$P_Value, scientific = TRUE), "\n")
+    cat("  FDR p-value =", format(results_list[[i]]$FDR_Adjusted_P_Value, scientific = TRUE), "\n")
+    cat("  95% CI: [", round(results_list[[i]]$Conf_Int_Lower, 4), ", ", 
+        round(results_list[[i]]$Conf_Int_Upper, 4), "]\n")
+    cat("  Log2 FC =", round(results_list[[i]]$Log2_Fold_Change, 4), "\n")
+  }
+}
+
+# Save the workbook
+output_path <- here("R Projects", "2107claude", "output", "de_analysis", "t.test", paste0(gene_of_interest, ".xlsx"))
+
+# Create directory if it doesn't exist
+dir.create(dirname(output_path), recursive = TRUE, showWarnings = FALSE)
+
+# Save workbook
+saveWorkbook(wb, file = output_path, overwrite = TRUE)
+```
+
+#### S1pr4
+
+```{r}
+# Define the gene of interest
+gene_of_interest <- "S1pr4"
+
+# Define pairwise comparisons
+pairwise_comparisons <- list(
+  "NAIVE_WB_vs_NAIVE_BM"     = c("Naive_WB", "Naive_BM"),
+  "NAIVE_WB_vs_SHAM_WB"      = c("Naive_WB", "Sham_WB"),
+  "NAIVE_WB_vs_SHAM_BM"      = c("Naive_WB", "Sham_BM"),
+  "NAIVE_WB_vs_UT_WB"        = c("Naive_WB", "UT_WB"),
+  "NAIVE_WB_vs_UT_BM"        = c("Naive_WB", "UT_BM"),
+  "NAIVE_BM_vs_SHAM_WB"      = c("Naive_BM", "Sham_WB"),
+  "NAIVE_BM_vs_SHAM_BM"      = c("Naive_BM", "Sham_BM"),
+  "NAIVE_BM_vs_UT_WB"        = c("Naive_BM", "UT_WB"),
+  "NAIVE_BM_vs_UT_BM"        = c("Naive_BM", "UT_BM"),
+  "SHAM_WB_vs_SHAM_BM"       = c("Sham_WB", "Sham_BM"),
+  "SHAM_WB_vs_UT_WB"         = c("Sham_WB", "UT_WB"),
+  "SHAM_WB_vs_UT_BM"         = c("Sham_WB", "UT_BM"),
+  "SHAM_BM_vs_UT_WB"         = c("Sham_BM", "UT_WB"),
+  "SHAM_BM_vs_UT_BM"         = c("Sham_BM", "UT_BM"),
+  "UT_WB_vs_UT_BM"           = c("UT_WB", "UT_BM")
+)
+
+# Initialize list to store results for FDR calculation
+all_pvalues <- numeric(length(pairwise_comparisons))
+results_list <- list()
+
+# Create workbook
+wb <- createWorkbook()
+
+# Loop through each pairwise comparison
+for (i in seq_along(pairwise_comparisons)) {
+  comparison_name <- names(pairwise_comparisons)[i]
+  groups <- pairwise_comparisons[[i]]
+  group1 <- groups[1]
+  group2 <- groups[2]
+  
+  cat("Processing comparison:", comparison_name, "\n")
+  
+  # Extract expression data for the gene of interest
+  gene_expression <- FetchData(seu_T, vars = gene_of_interest, layer = "data")
+  
+  # Get sample names from metadata
+  sample_names <- seu_T@meta.data$sample_name
+  
+  # Extract expression values for each group
+  group1_cells <- which(sample_names == group1)
+  group2_cells <- which(sample_names == group2)
+  
+  group1_expression <- gene_expression[group1_cells, gene_of_interest]
+  group2_expression <- gene_expression[group2_cells, gene_of_interest]
+  
+  # Check if both groups have data
+  if (length(group1_expression) == 0 || length(group2_expression) == 0) {
+    cat("Warning: No cells found for one or both groups in", comparison_name, "\n")
+    next
+  }
+  
+  # Perform Welch's t-test
+  t_test_result <- t.test(group1_expression, group2_expression, var.equal = FALSE)
+  
+  # Calculate means
+  mean_group1 <- mean(group1_expression, na.rm = TRUE)
+  mean_group2 <- mean(group2_expression, na.rm = TRUE)
+  
+  # Calculate log2 fold change (group1 - group2)
+  log2_fc <- mean_group1 - mean_group2
+  
+  # Extract results
+  t_statistic <- t_test_result$statistic
+  df <- t_test_result$parameter
+  p_value <- t_test_result$p.value
+  conf_int_lower <- t_test_result$conf.int[1]
+  conf_int_upper <- t_test_result$conf.int[2]
+  
+  # Store p-value for FDR calculation
+  all_pvalues[i] <- p_value
+  
+  # Create results data frame
+  results_df <- data.frame(
+    Gene = gene_of_interest,
+    Comparison = comparison_name,
+    Group1 = group1,
+    Group2 = group2,
+    N_Group1 = length(group1_expression),
+    N_Group2 = length(group2_expression),
+    Mean_Group1 = mean_group1,
+    Mean_Group2 = mean_group2,
+    Log2_Fold_Change = log2_fc,
+    t_Statistic = as.numeric(t_statistic),
+    Degrees_of_Freedom = as.numeric(df),
+    P_Value = p_value,
+    Conf_Int_Lower = conf_int_lower,
+    Conf_Int_Upper = conf_int_upper,
+    stringsAsFactors = FALSE
+  )
+  
+  # Store results for later FDR adjustment
+  results_list[[i]] <- results_df
+  
+  # Add worksheet to workbook
+  addWorksheet(wb, sheetName = comparison_name)
+  writeData(wb, sheet = comparison_name, x = results_df)
+}
+
+# Calculate FDR-adjusted p-values
+fdr_adjusted <- p.adjust(all_pvalues, method = "fdr")
+
+# Add FDR-adjusted p-values to each worksheet
+for (i in seq_along(results_list)) {
+  if (!is.null(results_list[[i]])) {
+    comparison_name <- names(pairwise_comparisons)[i]
+    
+    # Add FDR column to existing data
+    results_list[[i]]$FDR_Adjusted_P_Value <- fdr_adjusted[i]
+    
+    # Clear and rewrite the worksheet with updated data
+    removeWorksheet(wb, comparison_name)
+    addWorksheet(wb,
