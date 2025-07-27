@@ -1105,6 +1105,7 @@ saveWorkbook(wb, file = output_path, overwrite = TRUE)
 ## T Cells
 
 ### Volcano Plots
+
 ```{R, cahce=TRUE}
 # Function to create volcano plots for S1PR genes
 create_s1pr_volcano_plots <- function(seu_T) {
@@ -1206,6 +1207,7 @@ volcano_plots <- create_s1pr_volcano_plots(seu_T)
 ```
 
 ### Box Plots
+
 ```{R, cache=TRUE}
 # Function to create individual box plots for each S1PR gene
 create_s1pr_box_plots <- function(seu_T) {
@@ -1350,7 +1352,9 @@ create_s1pr_box_plots <- function(seu_T) {
 # Create box plots
 box_plots <- create_s1pr_box_plots(seu_T)
 ```
+
 ### Violin Plots
+
 ```{R, cache=TRUE}
 # Function to create individual violin plots for each S1PR gene
 create_s1pr_violin_plots <- function(seu_T) {
@@ -1500,11 +1504,15 @@ create_s1pr_violin_plots <- function(seu_T) {
 # Create violin plots
 violin_plots <- create_s1pr_violin_plots(seu_T)
 ```
+
 ### Nebulosa
+
 ```{R, cache=TRUE}
 
 ```
+
 ### Heatmaps
+
 ```{R, cache=TRUE}
 
 ```
