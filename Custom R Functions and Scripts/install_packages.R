@@ -65,7 +65,7 @@ devtools::install_github("immunogenomics/presto", dependencies = TRUE)
 remotes::install_github("nx10/httpgd", dependencies = TRUE)
 remotes::install_github("bnprks/BPCells/r", dependencies = TRUE)
 devtools::install_github("cole-trapnell-lab/monocle3", dependencies = TRUE)
-devtools::install_github("jokergoo/ComplexHeatmap")
+(devtools::install_github("jokergoo/ComplexHeatmap"))"de"
 
 # Seurat (CRAN)
 install.packages("Seurat", dependencies = TRUE)
