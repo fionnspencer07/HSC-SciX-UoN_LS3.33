@@ -1,8 +1,13 @@
 ---
+output_dir: "R Projects/2107claude/output/rmd_outs"
 output: 
   html_document: 
-    output_dir: here::here("R Projects", "2107claude", "output", "rmd_outs" )
+    toc: true
+    toc_depth: 6
+    toc_float: true
+    code_folding: hide
     keep_md: true
+    number_sections: true
 ---
 
 ```{r}
@@ -1508,6 +1513,23 @@ violin_plots <- create_s1pr_violin_plots(seu_T)
 ### Nebulosa
 
 ```{R, cache=TRUE}
+# S1pr1
+Nebulosa::plot_density(seu_T, "S1pr1") + 
+    facet_wrap(.~seu_T$sample_name, ncol = 3) + theme_void()
+# S1pr2
+Nebulosa::plot_density(seu_T, "S1pr2") + 
+    facet_wrap(.~seu_T$sample_name, ncol = 3) + theme_void()
+# S1pr3
+Nebulosa::plot_density(seu_T, "S1pr3") + 
+    facet_wrap(.~seu_T$sample_name, ncol = 3) + theme_void()
+# S1pr4
+Nebulosa::plot_density(seu_T, "S1pr4") + 
+    facet_wrap(.~seu_T$sample_name, ncol = 3) + theme_void()
+# S1pr5
+Nebulosa::plot_density(seu_T, "S1pr5") + 
+    facet_wrap(.~seu_T$sample_name, ncol = 3) + theme_void()
+```
+```{r}
 
 ```
 
