@@ -1075,4 +1075,436 @@ for (i in seq_along(results_list)) {
     
     # Clear and rewrite the worksheet with updated data
     removeWorksheet(wb, comparison_name)
-    addWorksheet(wb,
+    addWorksheet(wb, sheetName = comparison_name)
+    writeData(wb, sheet = comparison_name, x = results_list[[i]])
+    
+    # Print summary for this comparison
+    cat("\n", comparison_name, ":\n")
+    cat("  t =", round(results_list[[i]]$t_Statistic, 4), "\n")
+    cat("  df =", round(results_list[[i]]$Degrees_of_Freedom, 2), "\n")
+    cat("  p-value =", format(results_list[[i]]$P_Value, scientific = TRUE), "\n")
+    cat("  FDR p-value =", format(results_list[[i]]$FDR_Adjusted_P_Value, scientific = TRUE), "\n")
+    cat("  95% CI: [", round(results_list[[i]]$Conf_Int_Lower, 4), ", ", 
+        round(results_list[[i]]$Conf_Int_Upper, 4), "]\n")
+    cat("  Log2 FC =", round(results_list[[i]]$Log2_Fold_Change, 4), "\n")
+  }
+}
+
+# Save the workbook
+output_path <- here("R Projects", "2107", "output", "de_analysis", "t.test", paste0(gene_of_interest, ".xlsx"))
+
+# Create directory if it doesn't exist
+dir.create(dirname(output_path), recursive = TRUE, showWarnings = FALSE)
+
+# Save workbook
+saveWorkbook(wb, file = output_path, overwrite = TRUE)
+```
+
+# Visualisation
+
+## T Cells
+
+### Volcano Plots
+```{R, cahce=TRUE}
+# Function to create volcano plots for S1PR genes
+create_s1pr_volcano_plots <- function(seu_T) {
+  # Define S1PR genes
+  s1pr_genes <- c("S1pr1", "S1pr2", "S1pr3", "S1pr4", "S1pr5")
+  
+  # Define all 15 pairwise comparisons
+  pairwise_comparisons <- list(
+    "NAIVE_WB_vs_NAIVE_BM"     = c("Naive_WB", "Naive_BM"),
+    "NAIVE_WB_vs_SHAM_WB"      = c("Naive_WB", "Sham_WB"),
+    "NAIVE_WB_vs_SHAM_BM"      = c("Naive_WB", "Sham_BM"),
+    "NAIVE_WB_vs_UT_WB"        = c("Naive_WB", "UT_WB"),
+    "NAIVE_WB_vs_UT_BM"        = c("Naive_WB", "UT_BM"),
+    "NAIVE_BM_vs_SHAM_WB"      = c("Naive_BM", "Sham_WB"),
+    "NAIVE_BM_vs_SHAM_BM"      = c("Naive_BM", "Sham_BM"),
+    "NAIVE_BM_vs_UT_WB"        = c("Naive_BM", "UT_WB"),
+    "NAIVE_BM_vs_UT_BM"        = c("Naive_BM", "UT_BM"),
+    "SHAM_WB_vs_SHAM_BM"       = c("Sham_WB", "Sham_BM"),
+    "SHAM_WB_vs_UT_WB"         = c("Sham_WB", "UT_WB"),
+    "SHAM_WB_vs_UT_BM"         = c("Sham_WB", "UT_BM"),
+    "SHAM_BM_vs_UT_WB"         = c("Sham_BM", "UT_WB"),
+    "SHAM_BM_vs_UT_BM"         = c("Sham_BM", "UT_BM"),
+    "UT_WB_vs_UT_BM"           = c("UT_WB", "UT_BM")
+  )
+  
+  volcano_plots <- list()
+  
+  for (comparison_name in names(pairwise_comparisons)) {
+    groups <- pairwise_comparisons[[comparison_name]]
+    
+    cat("Creating volcano plot for:", comparison_name, "\n")
+    
+    # Run differential expression analysis
+    de_results <- FindMarkers(
+      seu_T,
+      group.by = "sample_name",
+      ident.1 = groups[1],
+      ident.2 = groups[2],
+      test.use = "wilcox",
+      logfc.threshold = 0,
+      min.pct = 0
+    )
+    
+    # Add gene names
+    de_results$gene <- rownames(de_results)
+    
+    # Fix zero p-values to avoid volcano plot warnings
+    # Replace 0 p-values with a very small number
+    min_nonzero_p <- min(de_results$p_val[de_results$p_val > 0], na.rm = TRUE)
+    min_nonzero_p_adj <- min(de_results$p_val_adj[de_results$p_val_adj > 0], na.rm = TRUE)
+    
+    de_results$p_val[de_results$p_val == 0] <- min_nonzero_p * 0.1
+    de_results$p_val_adj[de_results$p_val_adj == 0] <- min_nonzero_p_adj * 0.1
+    
+    # Create volcano plot
+    volcano_plot <- EnhancedVolcano(
+      de_results,
+      lab = de_results$gene,
+      x = 'avg_log2FC',
+      y = 'p_val_adj',
+      title = paste('Volcano Plot:', comparison_name),
+      subtitle = paste('T Cells:', groups[1], 'vs', groups[2]),
+      pCutoff = 0.05,
+      FCcutoff = 0.25,
+      pointSize = 1.5,
+      labSize = 3,
+      # Highlight S1PR genes
+      selectLab = s1pr_genes,
+      boxedLabels = TRUE,
+      colAlpha = 0.7,
+      legendPosition = 'right',
+      legendLabSize = 10,
+      legendIconSize = 3.0,
+      drawConnectors = TRUE,
+      widthConnectors = 0.3,
+      colConnectors = 'black'
+    )
+    
+    volcano_plots[[comparison_name]] <- volcano_plot
+    print(volcano_plot)
+    
+    # Save individual volcano plot as SVG
+    ggsave(
+      filename = here("R Projects", "2107claude", "output", "visualisation", "volcano", 
+                      paste0("volcano_", comparison_name, ".svg")),
+      plot = volcano_plot,
+      device = "svg",
+      width = 10, height = 8
+    )
+  }
+  
+  cat("\nTotal volcano plots created:", length(volcano_plots), "\n")
+  
+  return(volcano_plots)
+}
+
+# Create volcano plots
+volcano_plots <- create_s1pr_volcano_plots(seu_T)
+```
+
+### Box Plots
+```{R, cache=TRUE}
+# Function to create individual box plots for each S1PR gene
+create_s1pr_box_plots <- function(seu_T) {
+  # Define S1PR genes
+  s1pr_genes <- c("S1pr1", "S1pr2", "S1pr3", "S1pr4", "S1pr5")
+  
+  # Check which genes are available
+  available_genes <- s1pr_genes[s1pr_genes %in% rownames(seu_T)]
+  
+  if (length(available_genes) == 0) {
+    cat("No S1PR genes found in dataset\n")
+    return(NULL)
+  }
+  
+  cat("Creating individual box plots for genes:", paste(available_genes, collapse = ", "), "\n")
+  
+  # Extract expression data
+  expr_data <- GetAssayData(seu_T, slot = "data", layer = "data")[available_genes, , drop = FALSE]
+  if (inherits(expr_data, "dgCMatrix")) {
+    expr_data <- as.matrix(expr_data)
+  }
+  
+  # Create long format data
+  plot_data <- expr_data %>%
+    as.data.frame() %>%
+    tibble::rownames_to_column("gene") %>%
+    pivot_longer(-gene, names_to = "cell", values_to = "expression") %>%
+    left_join(seu_T@meta.data %>% tibble::rownames_to_column("cell"), by = "cell")
+  
+  # Define colors for your actual data values
+  treatment_colors <- c(
+    "NAIVE" = "#2166AC",
+    "SHAM" = "#762A83", 
+    "UT" = "#C51B7D"
+  )
+  
+  tissue_colors <- c(
+    "Whole_blood" = "#D73027",
+    "Bone_marrow" = "#4575B4"
+  )
+  
+  all_plots <- list()
+  
+  # Create individual plots for each gene
+  for (gene in available_genes) {
+    gene_data <- plot_data %>% filter(gene == !!gene)
+    
+    cat("Creating box plots for", gene, "\n")
+    
+    # Box plot by treatment for this gene
+    p_treatment <- ggplot(gene_data, aes(x = treatment, y = expression, fill = treatment)) +
+      geom_boxplot(alpha = 0.7, outlier.size = 0.5) +
+      geom_jitter(width = 0.2, alpha = 0.2, size = 0.3) +
+      scale_fill_manual(values = treatment_colors) +
+      theme_minimal() +
+      theme(
+        axis.text.x = element_text(angle = 45, hjust = 1, size = 12),
+        axis.text.y = element_text(size = 11),
+        axis.title = element_text(size = 14, face = "bold"),
+        plot.title = element_text(size = 16, face = "bold"),
+        plot.subtitle = element_text(size = 12),
+        legend.position = "none",
+        panel.grid.minor = element_blank()
+      ) +
+      labs(
+        x = "Treatment",
+        y = "Expression (Log-normalized)",
+        title = paste(gene, "Expression by Treatment"),
+        subtitle = "T Cells"
+      )
+    
+    # Box plot by tissue for this gene
+    p_tissue <- ggplot(gene_data, aes(x = tissue, y = expression, fill = tissue)) +
+      geom_boxplot(alpha = 0.7, outlier.size = 0.5) +
+      geom_jitter(width = 0.2, alpha = 0.2, size = 0.3) +
+      scale_fill_manual(values = tissue_colors) +
+      theme_minimal() +
+      theme(
+        axis.text.x = element_text(angle = 45, hjust = 1, size = 12),
+        axis.text.y = element_text(size = 11),
+        axis.title = element_text(size = 14, face = "bold"),
+        plot.title = element_text(size = 16, face = "bold"),
+        plot.subtitle = element_text(size = 12),
+        legend.position = "none",
+        panel.grid.minor = element_blank()
+      ) +
+      labs(
+        x = "Tissue",
+        y = "Expression (Log-normalized)",
+        title = paste(gene, "Expression by Tissue"),
+        subtitle = "T Cells"
+      )
+    
+    # Box plot by sample for this gene
+    p_sample <- ggplot(gene_data, aes(x = sample_name, y = expression, fill = treatment)) +
+      geom_boxplot(alpha = 0.7, outlier.size = 0.5) +
+      scale_fill_manual(values = treatment_colors) +
+      theme_minimal() +
+      theme(
+        axis.text.x = element_text(angle = 45, hjust = 1, size = 11),
+        axis.text.y = element_text(size = 11),
+        axis.title = element_text(size = 14, face = "bold"),
+        plot.title = element_text(size = 16, face = "bold"),
+        plot.subtitle = element_text(size = 12),
+        legend.title = element_text(size = 12, face = "bold"),
+        legend.text = element_text(size = 10),
+        panel.grid.minor = element_blank()
+      ) +
+      labs(
+        x = "Sample",
+        y = "Expression (Log-normalized)",
+        title = paste(gene, "Expression by Sample"),
+        subtitle = "T Cells",
+        fill = "Treatment"
+      )
+    
+    # Display plots
+    print(p_treatment)
+    print(p_tissue)
+    print(p_sample)
+    
+    # Save individual plots as SVG
+    ggsave(here("R Projects", "2107claude", "output", "visualisation", "box plots", 
+                paste0(gene, "_boxplot_treatment.svg")),
+           p_treatment, device = "svg", width = 8, height = 6)
+    ggsave(here("R Projects", "2107claude", "output", "visualisation", "box plots", 
+                paste0(gene, "_boxplot_tissue.svg")),
+           p_tissue, device = "svg", width = 8, height = 6)
+    ggsave(here("R Projects", "2107claude", "output", "visualisation", "box plots", 
+                paste0(gene, "_boxplot_sample.svg")),
+           p_sample, device = "svg", width = 10, height = 6)
+    
+    # Store plots
+    all_plots[[paste0(gene, "_treatment")]] <- p_treatment
+    all_plots[[paste0(gene, "_tissue")]] <- p_tissue
+    all_plots[[paste0(gene, "_sample")]] <- p_sample
+  }
+  
+  return(all_plots)
+}
+
+# Create box plots
+box_plots <- create_s1pr_box_plots(seu_T)
+```
+### Violin Plots
+```{R, cache=TRUE}
+# Function to create individual violin plots for each S1PR gene
+create_s1pr_violin_plots <- function(seu_T) {
+  # Define S1PR genes
+  s1pr_genes <- c("S1pr1", "S1pr2", "S1pr3", "S1pr4", "S1pr5")
+  
+  # Check which genes are available
+  available_genes <- s1pr_genes[s1pr_genes %in% rownames(seu_T)]
+  
+  if (length(available_genes) == 0) {
+    cat("No S1PR genes found in dataset\n")
+    return(NULL)
+  }
+  
+  cat("Creating individual violin plots for genes:", paste(available_genes, collapse = ", "), "\n")
+  
+  # Extract expression data
+  expr_data <- GetAssayData(seu_T, slot = "data", layer = "data")[available_genes, , drop = FALSE]
+  if (inherits(expr_data, "dgCMatrix")) {
+    expr_data <- as.matrix(expr_data)
+  }
+  
+  # Create long format data
+  plot_data <- expr_data %>%
+    as.data.frame() %>%
+    tibble::rownames_to_column("gene") %>%
+    pivot_longer(-gene, names_to = "cell", values_to = "expression") %>%
+    left_join(seu_T@meta.data %>% tibble::rownames_to_column("cell"), by = "cell")
+  
+  # Define colors for your actual data values
+  treatment_colors <- c(
+    "NAIVE" = "#2166AC",
+    "SHAM" = "#762A83", 
+    "UT" = "#C51B7D"
+  )
+  
+  tissue_colors <- c(
+    "Whole_blood" = "#D73027",
+    "Bone_marrow" = "#4575B4"
+  )
+  
+  all_plots <- list()
+  
+  # Create individual plots for each gene
+  for (gene in available_genes) {
+    gene_data <- plot_data %>% filter(gene == !!gene)
+    
+    cat("Creating violin plots for", gene, "\n")
+    
+    # Violin plot by treatment for this gene
+    p_violin_treatment <- ggplot(gene_data, aes(x = treatment, y = expression, fill = treatment)) +
+      geom_violin(scale = "width", alpha = 0.7, trim = FALSE) +
+      geom_boxplot(width = 0.1, outlier.shape = NA, alpha = 0.8, fill = "white") +
+      stat_summary(fun = median, geom = "point", size = 3, color = "black") +
+      scale_fill_manual(values = treatment_colors) +
+      theme_minimal() +
+      theme(
+        axis.text.x = element_text(angle = 45, hjust = 1, size = 12),
+        axis.text.y = element_text(size = 11),
+        axis.title = element_text(size = 14, face = "bold"),
+        plot.title = element_text(size = 16, face = "bold"),
+        plot.subtitle = element_text(size = 12),
+        legend.position = "none",
+        panel.grid.minor = element_blank()
+      ) +
+      labs(
+        x = "Treatment",
+        y = "Expression (Log-normalized)",
+        title = paste(gene, "Expression Distribution by Treatment"),
+        subtitle = "T Cells - Violin Plot"
+      )
+    
+    # Violin plot by sample for this gene
+    p_violin_sample <- ggplot(gene_data, aes(x = sample_name, y = expression, fill = treatment)) +
+      geom_violin(scale = "width", alpha = 0.7, trim = FALSE) +
+      geom_boxplot(width = 0.1, outlier.shape = NA, alpha = 0.8, fill = "white") +
+      scale_fill_manual(values = treatment_colors) +
+      theme_minimal() +
+      theme(
+        axis.text.x = element_text(angle = 45, hjust = 1, size = 11),
+        axis.text.y = element_text(size = 11),
+        axis.title = element_text(size = 14, face = "bold"),
+        plot.title = element_text(size = 16, face = "bold"),
+        plot.subtitle = element_text(size = 12),
+        legend.title = element_text(size = 12, face = "bold"),
+        legend.text = element_text(size = 10),
+        panel.grid.minor = element_blank()
+      ) +
+      labs(
+        x = "Sample",
+        y = "Expression (Log-normalized)",
+        title = paste(gene, "Expression Distribution by Sample"),
+        subtitle = "T Cells - Violin Plot",
+        fill = "Treatment"
+      )
+    
+    # Split violin plot comparing tissues within each treatment for this gene
+    p_violin_split <- ggplot(gene_data, aes(x = treatment, y = expression, fill = tissue)) +
+      geom_violin(position = position_dodge(width = 0.8), alpha = 0.7) +
+      geom_boxplot(position = position_dodge(width = 0.8), width = 0.1, 
+                   outlier.shape = NA, alpha = 0.8, fill = "white") +
+      scale_fill_manual(values = tissue_colors) +
+      theme_minimal() +
+      theme(
+        axis.text.x = element_text(angle = 45, hjust = 1, size = 12),
+        axis.text.y = element_text(size = 11),
+        axis.title = element_text(size = 14, face = "bold"),
+        plot.title = element_text(size = 16, face = "bold"),
+        plot.subtitle = element_text(size = 12),
+        legend.title = element_text(size = 12, face = "bold"),
+        legend.text = element_text(size = 10),
+        panel.grid.minor = element_blank()
+      ) +
+      labs(
+        x = "Treatment",
+        y = "Expression (Log-normalized)",
+        title = paste(gene, "Expression: Treatment vs Tissue"),
+        subtitle = "T Cells - Split Violin Plot",
+        fill = "Tissue"
+      )
+    
+    # Display plots
+    print(p_violin_treatment)
+    print(p_violin_sample)
+    print(p_violin_split)
+    
+    # Save individual plots as SVG
+    ggsave(here("R Projects", "2107claude", "output", "visualisation", "violin plots", 
+                paste0(gene, "_violin_treatment.svg")),
+           p_violin_treatment, device = "svg", width = 8, height = 6)
+    ggsave(here("R Projects", "2107claude", "output", "visualisation", "violin plots", 
+                paste0(gene, "_violin_sample.svg")),
+           p_violin_sample, device = "svg", width = 10, height = 6)
+    ggsave(here("R Projects", "2107claude", "output", "visualisation", "violin plots", 
+                paste0(gene, "_violin_split.svg")),
+           p_violin_split, device = "svg", width = 8, height = 6)
+    
+    # Store plots
+    all_plots[[paste0(gene, "_treatment")]] <- p_violin_treatment
+    all_plots[[paste0(gene, "_sample")]] <- p_violin_sample
+    all_plots[[paste0(gene, "_split")]] <- p_violin_split
+  }
+  
+  return(all_plots)
+}
+
+# Create violin plots
+violin_plots <- create_s1pr_violin_plots(seu_T)
+```
+### Nebulosa
+```{R, cache=TRUE}
+
+```
+### Heatmaps
+```{R, cache=TRUE}
+
+```
