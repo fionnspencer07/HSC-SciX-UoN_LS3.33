@@ -1,7 +1,7 @@
 ---
 output: 
   html_document: 
-    output_dir: here::here("R Projects", "2107", "rmd_outs" )
+    output_dir: here::here("R Projects", "2107", "output", "rmd_outs" )
     keep_md: true
 ---
 
@@ -2406,3 +2406,4 @@ saveWorkbook(wb, file = output_path, overwrite = TRUE)
 ### Nebulosa
 
 ### Heatmaps
+
