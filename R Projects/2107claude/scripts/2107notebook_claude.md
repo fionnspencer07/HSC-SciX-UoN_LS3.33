@@ -1,8 +1,16 @@
 ---
-output: 
-  html_document: 
-    output_dir: here::here("R Projects", "2107claude", "output", "rmd_outs" )
+output_dir: R Projects/2107claude/output/rmd_outs
+output:
+  html_document:
+    toc: true
+    toc_depth: 6
+    toc_float: true
+    code_folding: hide
     keep_md: true
+    number_sections: true
+  pdf_document:
+    toc: true
+    toc_depth: '6'
 ---
 
 
@@ -791,7 +799,7 @@ OR
 base::saveRDS(seu_NKT_focused, file = here("Data", "seu_NKT_focused.rds") )
 ```
 
-#### Load RDS
+#### Load rds
 
 
 ``` r
@@ -2703,6 +2711,7 @@ saveWorkbook(wb, file = output_path, overwrite = TRUE)
 
 ### Volcano Plots
 
+
 ``` r
 # Function to create volcano plots for S1PR genes
 create_s1pr_volcano_plots <- function(seu_T) {
@@ -2900,6 +2909,7 @@ volcano_plots <- create_s1pr_volcano_plots(seu_T)
 
 ### Box Plots
 
+
 ``` r
 # Function to create individual box plots for each S1PR gene
 create_s1pr_box_plots <- function(seu_T) {
@@ -3075,7 +3085,9 @@ box_plots <- create_s1pr_box_plots(seu_T)
 ```
 
 <img src="2107notebook_claude_files/figure-html/unnamed-chunk-28-13.svg" width="90%" keepaspectratio=true style="display: block; margin: auto;" /><img src="2107notebook_claude_files/figure-html/unnamed-chunk-28-14.svg" width="90%" keepaspectratio=true style="display: block; margin: auto;" /><img src="2107notebook_claude_files/figure-html/unnamed-chunk-28-15.svg" width="90%" keepaspectratio=true style="display: block; margin: auto;" />
+
 ### Violin Plots
+
 
 ``` r
 # Function to create individual violin plots for each S1PR gene
@@ -3257,7 +3269,551 @@ violin_plots <- create_s1pr_violin_plots(seu_T)
 ```
 
 <img src="2107notebook_claude_files/figure-html/unnamed-chunk-29-13.svg" width="90%" keepaspectratio=true style="display: block; margin: auto;" /><img src="2107notebook_claude_files/figure-html/unnamed-chunk-29-14.svg" width="90%" keepaspectratio=true style="display: block; margin: auto;" /><img src="2107notebook_claude_files/figure-html/unnamed-chunk-29-15.svg" width="90%" keepaspectratio=true style="display: block; margin: auto;" />
+
 ### Nebulosa
+
+
+``` r
+# S1pr1
+Nebulosa::plot_density(seu_T, "S1pr1") + 
+    facet_wrap(.~seu_T$sample_name, ncol = 3) + theme_void()
+```
+
+```
+## Warning: The `slot` argument of `FetchData()` is deprecated as of SeuratObject 5.0.0.
+## ℹ Please use the `layer` argument instead.
+## ℹ The deprecated feature was likely used in the Nebulosa package.
+##   Please report the issue at
+##   <https://github.com/powellgenomicslab/Nebulosa/issues>.
+## This warning is displayed once every 8 hours.
+## Call `lifecycle::last_lifecycle_warnings()` to see where this warning was
+## generated.
+```
+
+<img src="2107notebook_claude_files/figure-html/unnamed-chunk-30-1.svg" width="90%" keepaspectratio=true style="display: block; margin: auto;" />
+
+``` r
+# S1pr2
+Nebulosa::plot_density(seu_T, "S1pr2") + 
+    facet_wrap(.~seu_T$sample_name, ncol = 3) + theme_void()
+```
+
+<img src="2107notebook_claude_files/figure-html/unnamed-chunk-30-2.svg" width="90%" keepaspectratio=true style="display: block; margin: auto;" />
+
+``` r
+# S1pr3
+Nebulosa::plot_density(seu_T, "S1pr3") + 
+    facet_wrap(.~seu_T$sample_name, ncol = 3) + theme_void()
+```
+
+<img src="2107notebook_claude_files/figure-html/unnamed-chunk-30-3.svg" width="90%" keepaspectratio=true style="display: block; margin: auto;" />
+
+``` r
+# S1pr4
+Nebulosa::plot_density(seu_T, "S1pr4") + 
+    facet_wrap(.~seu_T$sample_name, ncol = 3) + theme_void()
+```
+
+<img src="2107notebook_claude_files/figure-html/unnamed-chunk-30-4.svg" width="90%" keepaspectratio=true style="display: block; margin: auto;" />
+
+``` r
+# S1pr5
+Nebulosa::plot_density(seu_T, "S1pr5") + 
+    facet_wrap(.~seu_T$sample_name, ncol = 3) + theme_void()
+```
+
+<img src="2107notebook_claude_files/figure-html/unnamed-chunk-30-5.svg" width="90%" keepaspectratio=true style="display: block; margin: auto;" />
+
+
 
 ### Heatmaps
 
+
+``` r
+# Define S1PR gene family
+s1pr_genes <- c("S1pr1", "S1pr2", "S1pr3", "S1pr4", "S1pr5")
+
+# Function to check gene availability and get expression data
+extract_s1pr_data <- function(seurat_obj, genes = s1pr_genes) {
+  # Check which S1PR genes are present in the dataset
+  available_genes <- genes[genes %in% rownames(seurat_obj)]
+  missing_genes <- genes[!genes %in% rownames(seurat_obj)]
+  
+  if (length(missing_genes) > 0) {
+    cat("Warning: Missing genes:", paste(missing_genes, collapse = ", "), "\n")
+  }
+  
+  if (length(available_genes) == 0) {
+    stop("No S1PR genes found in the dataset!")
+  }
+  
+  cat("Found S1PR genes:", paste(available_genes, collapse = ", "), "\n")
+  
+  # Extract expression data (using layer parameter instead of deprecated slot)
+  expr_data <- GetAssayData(seurat_obj, layer = "data")[available_genes, , drop = FALSE]
+  
+  # Convert sparse matrix to dense if needed
+  if (inherits(expr_data, "dgCMatrix")) {
+    expr_data <- as.matrix(expr_data)
+  }
+  
+  # Get metadata
+  metadata <- seurat_obj@meta.data
+  
+  return(list(
+    expression = expr_data,
+    metadata = metadata,
+    available_genes = available_genes
+  ))
+}
+
+# Function to create sample annotation colors
+create_annotation_colors <- function(metadata) {
+  # Define color palettes for your specific conditions
+  treatment_colors <- c(
+    "NAIVE" = "#2166AC",
+    "SHAM" = "#762A83", 
+    "UT" = "#C51B7D"
+  )
+  
+  tissue_colors <- c(
+    "Whole_blood" = "#D73027",
+    "Bone_marrow" = "#4575B4"
+  )
+  
+  return(list(
+    treatment = treatment_colors,
+    tissue = tissue_colors
+  ))
+}
+
+# Function to calculate summary statistics by treatment and tissue
+calculate_treatment_tissue_stats <- function(expr_data, metadata) {
+  # Convert to long format for easier manipulation
+  expr_long <- expr_data %>%
+    as.data.frame() %>%
+    tibble::rownames_to_column("gene") %>%
+    tidyr::pivot_longer(-gene, names_to = "cell", values_to = "expression")
+  
+  # Add metadata
+  expr_long <- expr_long %>%
+    dplyr::left_join(metadata %>% tibble::rownames_to_column("cell"), by = "cell")
+  
+  # Calculate summary statistics by treatment, tissue, and gene
+  summary_stats <- expr_long %>%
+    dplyr::group_by(gene, treatment, tissue) %>%
+    dplyr::summarise(
+      mean_expr = mean(expression),
+      median_expr = median(expression),
+      sd_expr = sd(expression),
+      n_cells = n(),
+      pct_positive = sum(expression > 0) / n() * 100,
+      .groups = "drop"
+    ) %>%
+    # Create combined treatment_tissue column for better visualization
+    dplyr::mutate(treatment_tissue = paste(treatment, tissue, sep = "_"))
+  
+  return(summary_stats)
+}
+
+# Function to create S1PR expression heatmap by treatment and tissue
+create_s1pr_treatment_tissue_heatmap <- function(seurat_obj, metric = "mean") {
+  # Extract data
+  s1pr_data <- extract_s1pr_data(seurat_obj)
+  expr_data <- s1pr_data$expression
+  metadata <- s1pr_data$metadata
+  
+  # Calculate summary statistics
+  summary_data <- calculate_treatment_tissue_stats(expr_data, metadata)
+  
+  cat("Summary data structure:\n")
+  print(head(summary_data))
+  cat("Unique treatment_tissue combinations:", paste(unique(summary_data$treatment_tissue), collapse = ", "), "\n")
+  
+  # Create summary matrix using explicit dplyr functions
+  if (metric == "mean") {
+    summary_matrix <- summary_data %>%
+      dplyr::select(gene, treatment_tissue, mean_expr) %>%
+      tidyr::pivot_wider(names_from = treatment_tissue, values_from = mean_expr) %>%
+      tibble::column_to_rownames("gene") %>%
+      as.matrix()
+    title_suffix <- "Mean Expression"
+    legend_title <- "Mean Expression"
+  } else if (metric == "pct_positive") {
+    summary_matrix <- summary_data %>%
+      dplyr::select(gene, treatment_tissue, pct_positive) %>%
+      tidyr::pivot_wider(names_from = treatment_tissue, values_from = pct_positive) %>%
+      tibble::column_to_rownames("gene") %>%
+      as.matrix()
+    title_suffix <- "% Positive Cells"
+    legend_title <- "% Positive"
+  }
+  
+  cat("Summary matrix dimensions:", dim(summary_matrix), "\n")
+  cat("Column names:", colnames(summary_matrix), "\n")
+  
+  # Create annotation for treatment-tissue combinations
+  col_info <- summary_data %>%
+    dplyr::select(treatment_tissue, treatment, tissue) %>%
+    dplyr::distinct() %>%
+    dplyr::arrange(treatment_tissue) %>%
+    tibble::column_to_rownames("treatment_tissue")
+  
+  # Ensure column order matches
+  summary_matrix <- summary_matrix[, rownames(col_info), drop = FALSE]
+  
+  anno_colors <- create_annotation_colors(metadata)
+  
+  col_anno <- HeatmapAnnotation(
+    Treatment = col_info$treatment,
+    Tissue = col_info$tissue,
+    col = list(
+      Treatment = anno_colors$treatment,
+      Tissue = anno_colors$tissue
+    ),
+    annotation_name_gp = gpar(fontsize = 10, fontface = "bold")
+  )
+  
+  # Create color function
+  if (metric == "mean") {
+    max_val <- max(summary_matrix, na.rm = TRUE)
+    col_fun <- colorRamp2(c(0, max_val/2, max_val), c("white", "pink", "red"))
+  } else {
+    col_fun <- colorRamp2(c(0, 50, 100), c("white", "orange", "red"))
+  }
+  
+  # Create heatmap
+  ht <- Heatmap(
+    summary_matrix,
+    name = legend_title,
+    col = col_fun,
+    
+    # Appearance
+    column_title = paste("S1PR", title_suffix, "by Treatment and Tissue"),
+    column_title_gp = gpar(fontsize = 14, fontface = "bold"),
+    row_title = "S1PR Genes", 
+    row_title_gp = gpar(fontsize = 12, fontface = "bold"),
+    row_names_gp = gpar(fontsize = 11, fontface = "italic"),
+    column_names_gp = gpar(fontsize = 10),
+    
+    # Clustering
+    cluster_rows = nrow(summary_matrix) > 1,
+    cluster_columns = TRUE,
+    
+    # Annotations
+    top_annotation = col_anno,
+    
+    # Cell text
+    cell_fun = function(j, i, x, y, width, height, fill) {
+      grid.text(sprintf("%.2f", summary_matrix[i, j]), 
+                x, y, gp = gpar(fontsize = 9, col = "black"))
+    },
+    
+    border = TRUE,
+    heatmap_legend_param = list(
+      title_gp = gpar(fontsize = 11, fontface = "bold"),
+      labels_gp = gpar(fontsize = 9)
+    )
+  )
+  
+  return(list(
+    heatmap = ht,
+    summary_matrix = summary_matrix,
+    summary_data = summary_data
+  ))
+}
+
+# Function for detailed single-cell heatmap with subsampling by treatment and tissue
+create_s1pr_detailed_treatment_tissue_heatmap <- function(seurat_obj, 
+                                                          subsample_cells = 100,
+                                                          scale_data = TRUE) {
+  
+  # Extract data
+  s1pr_data <- extract_s1pr_data(seurat_obj)
+  expr_data <- s1pr_data$expression
+  metadata <- s1pr_data$metadata
+  available_genes <- s1pr_data$available_genes
+  
+  # Subsample cells for visualization - stratified by treatment and tissue
+  cat("Subsampling to", subsample_cells, "cells per treatment-tissue combination...\n")
+  
+  # Add cell names to metadata for easier manipulation
+  metadata$cell_name <- rownames(metadata)
+  
+  # Stratified sampling by treatment and tissue - fixed the pull issue
+  sampled_cells <- metadata %>%
+    dplyr::mutate(treatment_tissue = paste(treatment, tissue, sep = "_")) %>%
+    dplyr::group_by(treatment_tissue) %>%
+    dplyr::sample_n(min(n(), subsample_cells)) %>%
+    dplyr::ungroup() %>%
+    dplyr::pull(cell_name)  # Now pulling a specific column
+  
+  expr_data <- expr_data[, sampled_cells]
+  metadata <- metadata[sampled_cells, ]
+  
+  # Scale data if requested
+  if (scale_data) {
+    expr_data <- t(scale(t(expr_data)))
+    # Handle any NaN values (genes with zero variance)
+    expr_data[is.nan(expr_data)] <- 0
+  }
+  
+  # Create annotation colors
+  anno_colors <- create_annotation_colors(metadata)
+  
+  # Create column annotations
+  col_anno <- HeatmapAnnotation(
+    Treatment = metadata$treatment,
+    Tissue = metadata$tissue,
+    col = list(
+      Treatment = anno_colors$treatment,
+      Tissue = anno_colors$tissue
+    ),
+    annotation_name_gp = gpar(fontsize = 10, fontface = "bold")
+  )
+  
+  # Order cells by treatment and tissue for better visualization
+  metadata <- metadata %>%
+    dplyr::mutate(treatment_tissue = paste(treatment, tissue, sep = "_"))
+  cell_order <- order(metadata$treatment_tissue)
+  expr_data_ordered <- expr_data[, cell_order]
+  
+  # Create color function for expression
+  if (scale_data) {
+    col_fun <- colorRamp2(c(-2, 0, 2), c("blue", "white", "red"))
+    heatmap_title <- "S1PR Expression (Z-score) by Treatment and Tissue"
+    legend_title <- "Z-score"
+  } else {
+    max_expr <- max(expr_data, na.rm = TRUE)
+    col_fun <- colorRamp2(c(0, max_expr/2, max_expr), c("white", "pink", "red"))
+    heatmap_title <- "S1PR Expression (Log-normalized) by Treatment and Tissue"
+    legend_title <- "Expression"
+  }
+  
+  # Create main heatmap
+  ht <- Heatmap(
+    expr_data_ordered,
+    name = legend_title,
+    col = col_fun,
+    
+    # Row parameters
+    row_title = "S1PR Genes",
+    row_title_gp = gpar(fontsize = 12, fontface = "bold"),
+    row_names_gp = gpar(fontsize = 11, fontface = "italic"),
+    cluster_rows = length(available_genes) > 1,
+    
+    # Column parameters  
+    column_title = heatmap_title,
+    column_title_gp = gpar(fontsize = 14, fontface = "bold"),
+    cluster_columns = FALSE,
+    show_column_names = FALSE,
+    
+    # Annotations
+    top_annotation = col_anno,
+    
+    # Appearance
+    border = TRUE,
+    heatmap_legend_param = list(
+      title_gp = gpar(fontsize = 11, fontface = "bold"),
+      labels_gp = gpar(fontsize = 9)
+    )
+  )
+  
+  return(ht)
+}
+
+# Create directories if they don't exist
+dir.create(here("R Projects", "2107claude", "output", "visualisation", "complex heatmaps"), 
+           recursive = TRUE, showWarnings = FALSE)
+
+# Create mean expression heatmap by treatment and tissue
+cat("Creating S1PR mean expression heatmap by treatment and tissue...\n")
+```
+
+```
+## Creating S1PR mean expression heatmap by treatment and tissue...
+```
+
+``` r
+mean_heatmap_result <- create_s1pr_treatment_tissue_heatmap(seu_T, metric = "mean")
+```
+
+```
+## Found S1PR genes: S1pr1, S1pr2, S1pr3, S1pr4, S1pr5 
+## Summary data structure:
+## # A tibble: 6 × 9
+##   gene  treatment tissue      mean_expr median_expr sd_expr n_cells pct_positive
+##   <chr> <chr>     <chr>           <dbl>       <dbl>   <dbl>   <int>        <dbl>
+## 1 S1pr1 NAIVE     Bone_marrow     0.484        0      0.773     260         30.4
+## 2 S1pr1 NAIVE     Whole_blood     0.718        0      0.875     458         43.7
+## 3 S1pr1 SHAM      Bone_marrow     0.392        0      0.668     163         28.8
+## 4 S1pr1 SHAM      Whole_blood     0.844        0      0.965    1042         45.7
+## 5 S1pr1 UT        Bone_marrow     1.08         1.30   0.920    7130         62.3
+## 6 S1pr1 UT        Whole_blood     0.704        0      0.923    2930         40.6
+## # ℹ 1 more variable: treatment_tissue <chr>
+## Unique treatment_tissue combinations: NAIVE_Bone_marrow, NAIVE_Whole_blood, SHAM_Bone_marrow, SHAM_Whole_blood, UT_Bone_marrow, UT_Whole_blood 
+## Summary matrix dimensions: 5 6 
+## Column names: NAIVE_Bone_marrow NAIVE_Whole_blood SHAM_Bone_marrow SHAM_Whole_blood UT_Bone_marrow UT_Whole_blood
+```
+
+``` r
+draw(mean_heatmap_result$heatmap)
+```
+
+<img src="2107notebook_claude_files/figure-html/unnamed-chunk-32-1.svg" width="90%" keepaspectratio=true style="display: block; margin: auto;" />
+
+``` r
+# Save mean expression heatmap as SVG using a different approach
+cat("Saving mean expression heatmap...\n")
+```
+
+```
+## Saving mean expression heatmap...
+```
+
+``` r
+heatmap_file <- here("R Projects", "2107claude", "output", "visualisation", "complex heatmaps", "s1pr_mean_expression_treatment_tissue_heatmap.svg")
+svg(heatmap_file, width = 10, height = 6)
+draw(mean_heatmap_result$heatmap)
+dev.off()
+```
+
+```
+## svg 
+##   2
+```
+
+``` r
+cat("Mean expression heatmap saved to:", heatmap_file, "\n")
+```
+
+```
+## Mean expression heatmap saved to: C:/Users/fionn/Newcastle Grammar School/NGS SciX-2025 UoN DMG Cancer Signalling - Bioinformatics and Proteomics/Fionn Git/HSC-SciX-UoN_LS3.33/R Projects/2107claude/output/visualisation/complex heatmaps/s1pr_mean_expression_treatment_tissue_heatmap.svg
+```
+
+``` r
+# Create percentage positive heatmap by treatment and tissue
+cat("Creating S1PR percentage positive heatmap by treatment and tissue...\n")
+```
+
+```
+## Creating S1PR percentage positive heatmap by treatment and tissue...
+```
+
+``` r
+pct_heatmap_result <- create_s1pr_treatment_tissue_heatmap(seu_T, metric = "pct_positive")
+```
+
+```
+## Found S1PR genes: S1pr1, S1pr2, S1pr3, S1pr4, S1pr5 
+## Summary data structure:
+## # A tibble: 6 × 9
+##   gene  treatment tissue      mean_expr median_expr sd_expr n_cells pct_positive
+##   <chr> <chr>     <chr>           <dbl>       <dbl>   <dbl>   <int>        <dbl>
+## 1 S1pr1 NAIVE     Bone_marrow     0.484        0      0.773     260         30.4
+## 2 S1pr1 NAIVE     Whole_blood     0.718        0      0.875     458         43.7
+## 3 S1pr1 SHAM      Bone_marrow     0.392        0      0.668     163         28.8
+## 4 S1pr1 SHAM      Whole_blood     0.844        0      0.965    1042         45.7
+## 5 S1pr1 UT        Bone_marrow     1.08         1.30   0.920    7130         62.3
+## 6 S1pr1 UT        Whole_blood     0.704        0      0.923    2930         40.6
+## # ℹ 1 more variable: treatment_tissue <chr>
+## Unique treatment_tissue combinations: NAIVE_Bone_marrow, NAIVE_Whole_blood, SHAM_Bone_marrow, SHAM_Whole_blood, UT_Bone_marrow, UT_Whole_blood 
+## Summary matrix dimensions: 5 6 
+## Column names: NAIVE_Bone_marrow NAIVE_Whole_blood SHAM_Bone_marrow SHAM_Whole_blood UT_Bone_marrow UT_Whole_blood
+```
+
+``` r
+draw(pct_heatmap_result$heatmap)
+```
+
+<img src="2107notebook_claude_files/figure-html/unnamed-chunk-32-2.svg" width="90%" keepaspectratio=true style="display: block; margin: auto;" />
+
+``` r
+# Save percentage positive heatmap as SVG
+cat("Saving percentage positive heatmap...\n")
+```
+
+```
+## Saving percentage positive heatmap...
+```
+
+``` r
+pct_file <- here("R Projects", "2107claude", "output", "visualisation", "complex heatmaps", "s1pr_percent_positive_treatment_tissue_heatmap.svg")
+svg(pct_file, width = 10, height = 6)
+draw(pct_heatmap_result$heatmap)
+dev.off()
+```
+
+```
+## svg 
+##   2
+```
+
+``` r
+cat("Percentage positive heatmap saved to:", pct_file, "\n")
+```
+
+```
+## Percentage positive heatmap saved to: C:/Users/fionn/Newcastle Grammar School/NGS SciX-2025 UoN DMG Cancer Signalling - Bioinformatics and Proteomics/Fionn Git/HSC-SciX-UoN_LS3.33/R Projects/2107claude/output/visualisation/complex heatmaps/s1pr_percent_positive_treatment_tissue_heatmap.svg
+```
+
+``` r
+# Create detailed single-cell heatmap by treatment and tissue
+cat("Creating detailed single-cell heatmap by treatment and tissue...\n")
+```
+
+```
+## Creating detailed single-cell heatmap by treatment and tissue...
+```
+
+``` r
+detailed_heatmap <- create_s1pr_detailed_treatment_tissue_heatmap(seu_T, subsample_cells = 100, scale_data = TRUE)
+```
+
+```
+## Found S1PR genes: S1pr1, S1pr2, S1pr3, S1pr4, S1pr5 
+## Subsampling to 100 cells per treatment-tissue combination...
+```
+
+``` r
+draw(detailed_heatmap)
+```
+
+<img src="2107notebook_claude_files/figure-html/unnamed-chunk-32-3.svg" width="90%" keepaspectratio=true style="display: block; margin: auto;" />
+
+``` r
+# Save detailed heatmap as SVG
+cat("Saving detailed single-cell heatmap...\n")
+```
+
+```
+## Saving detailed single-cell heatmap...
+```
+
+``` r
+detailed_file <- here("R Projects", "2107claude", "output", "visualisation", "complex heatmaps", "s1pr_detailed_treatment_tissue_heatmap.svg")
+svg(detailed_file, width = 14, height = 6)
+draw(detailed_heatmap)
+dev.off()
+```
+
+```
+## svg 
+##   2
+```
+
+``` r
+cat("Detailed heatmap saved to:", detailed_file, "\n")
+```
+
+```
+## Detailed heatmap saved to: C:/Users/fionn/Newcastle Grammar School/NGS SciX-2025 UoN DMG Cancer Signalling - Bioinformatics and Proteomics/Fionn Git/HSC-SciX-UoN_LS3.33/R Projects/2107claude/output/visualisation/complex heatmaps/s1pr_detailed_treatment_tissue_heatmap.svg
+```
+
+``` r
+cat("All S1PR treatment-tissue heatmaps created and saved as SVG!\n")
+```
+
+```
+## All S1PR treatment-tissue heatmaps created and saved as SVG!
+```
