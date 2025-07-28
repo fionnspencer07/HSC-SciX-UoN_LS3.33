@@ -1,0 +1,175 @@
+---
+title: "R Notebook"
+output: 
+  html_document:
+    toc: true
+    toc_depth: 6
+    toc_float: true
+    code_folding: hide
+    keep_md: true
+    number_sections: true
+---
+
+```{r}
+library(here) 
+
+# Set global knitr chunk options
+knitr::opts_chunk$set(
+    error     = TRUE,        # Ensures that error messages are being shown in the output
+    fig.align = "center",    # Ensures that all figures are aligned to the centre in the output
+    message   = TRUE,       # <--- Recommend FALSE for cleaner reports, set to TRUE for development
+    warning   = TRUE,       # <--- Recommend FALSE for cleaner reports, set to TRUE for development
+    autodep   = TRUE,        # Automatically detects dependencies for caching
+    cache     = TRUE,        # <--- IMPORTANT: Enable caching globally here!
+    results   = "markup",    # Displays the output as normal formatted text
+    echo      = TRUE,        # Ensures that the R code itself is displayed in the document
+    dev       = "svg",       # Graphics output will be in Scalable Vector Graphics (SVG) format
+    out.width = "90%",       # Sets the width of the output image or plot to 90% of the available width 
+    out.extra = "keepaspectratio=true" # Adds extra options to the output, preserving aspect ratio
+)
+
+# Set global option for future package (important for large parallel computations like Seurat/MAST)
+mib <- 9000*1024^2 # 9GB in bytes
+options(future.globals.maxSize = mib) 
+```
+
+
+
+```{r}
+library(here)
+```
+# Set Up Working Environment
+
+## Set Seed
+
+```{r}
+seed <- "210825"
+set.seed(seed)
+message("seed has been set to 210825 ")
+```
+
+## Load Packages & Functions
+
+```{r}
+source(here("Custom R Functions and Scripts", "init_packages.R"))
+```
+
+# Configuration
+
+## Custom Colours
+
+```{r}
+# Custom colors
+man_cols <- c("#86b0cc",  "#f3e65d", "#d5c1e7", "#eeb84c", "#82c39e", "#525252","#4d9f6b", "#b3939e", "#e76031", "#e9944b")
+names(man_cols) <- c("B_cells", "NK_cells", "monocytes", "T_cells", "neutrophils", "megakaryocytes", "pDCs",
+                     "plasma_cells", "progenitor_cells", "NKT_cells")
+```
+
+## Output Folders
+
+### Primary
+
+```{r}
+dir.create(here("R Projects", "2907", "output"), recursive = TRUE, showWarnings = FALSE)
+```
+
+### DGE
+
+```{r}
+dir.create(here("R Projects", "2107claude", "output", "de_analysis", "Find Markers"), recursive = TRUE, showWarnings = FALSE)
+dir.create(here("R Projects", "2107claude", "output", "de_analysis", "Presto"), recursive = TRUE, showWarnings = FALSE)
+dir.create(here("R Projects", "2107claude", "output", "de_analysis", "t.test"), recursive = TRUE, showWarnings = FALSE)
+```
+
+### Visualisation
+
+```{r}
+dir.create(here("R Projects", "2107claude", "output", "visualisation", "box plots"), recursive = TRUE, showWarnings = FALSE)
+dir.create(here("R Projects", "2107claude", "output", "visualisation", "complex heatmaps"), recursive = TRUE, showWarnings = FALSE)
+dir.create(here("R Projects", "2107claude", "output", "visualisation", "nebulosa"), recursive = TRUE, showWarnings = FALSE)
+dir.create(here("R Projects", "2107claude", "output", "visualisation", "violin plots"), recursive = TRUE, showWarnings = FALSE)
+dir.create(here("R Projects", "2107claude", "output", "visualisation", "volcano"), recursive = TRUE, showWarnings = FALSE)
+```
+
+# Import & Pre-processing of Data
+
+## Load RDS file
+
+### Load Original RDS
+
+Importing PhD Clara Savary's RDS & Initialising the object as a Seurat Object
+
+```{r, eval=FALSE}
+
+seu <- readRDS(here("Data",          "seu_NKT_blood_mouse_PPK_ONC_harmony_integrated_filtered_v2_20231_20236_annot.rds"))
+```
+
+### Subset
+
+Initial Subset to isolate T Cells, Natural Killer T Cells and Natural Killer Cells and label
+
+```{r, eval=FALSE}
+seu_NKT <- subset(seu, subset = cell_types %in% c("T_cells", "NK_cells", "NKT_cells"))
+```
+
+### Subset Dataset Again
+
+Second Subset -\> subsetting to remove treatment conditions involving theraputics as this is outside the bounds of the scope of the investigation.
+
+Including:
+
+-   DMG Mice (represented as untreated or UT)
+
+-   Control: No Cancer (Treatment and Disease Naive Group)
+
+-   Surgery Control (SHAM - Injected with Saline - to make sure that the stress of surgery isn't a factor and can be compared between Naive, UT and Sham)
+
+Excluding:
+
+-   ONC201 - Dordaviprone -\> DRD2 antagonist and ClpP agonist
+
+    -   <https://doi.org/10.1158/0008-5472.CAN-23-0186>
+
+    -   <https://doi.org/10.1158/2159-8290.CD-23-0131>
+
+-   Dex - Dexmethasone -\> Corticosteroid
+
+-   Dex & ONC201 Combo
+
+```{r, eval=FALSE}
+seu_NKT_focused <- subset(seu_NKT, subset = treatment %in% c("UT", "NAIVE", "SHAM"))
+```
+
+For later scripting - load seu_NKT_focused
+
+#### Export
+
+Use either base or BioCgenerics
+
+##### BioCgenerics
+
+```{r,eval=FALSE}
+BiocGenerics::saveRDS(seu_NKT_focused, file = here("Data", "seu_NKT_focused.rds"))
+```
+
+OR
+
+##### Base
+
+```{r, , eval=FALSE}
+base::saveRDS(seu_NKT_focused, file = here("Data", "seu_NKT_focused.rds") )
+```
+
+#### Load rds
+
+```{r, cache=FALSE}
+seu_NKT_focused <- readRDS(here("Data", "seu_NKT_focused.rds"))
+```
+
+# Differential Gene Expression Analysis
+
+## T Cells
+
+```{r, cache=FALSE}
+seu_T <- subset(seu_NKT_focused, subset = T_clusters %in% "T_cells")
+```
