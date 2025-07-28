@@ -76,19 +76,19 @@ dir.create(here("R Projects", "2907", "output"), recursive = TRUE, showWarnings 
 ### DGE
 
 ```{r}
-dir.create(here("R Projects", "2107claude", "output", "de_analysis", "Find Markers"), recursive = TRUE, showWarnings = FALSE)
-dir.create(here("R Projects", "2107claude", "output", "de_analysis", "Presto"), recursive = TRUE, showWarnings = FALSE)
-dir.create(here("R Projects", "2107claude", "output", "de_analysis", "t.test"), recursive = TRUE, showWarnings = FALSE)
+dir.create(here("R Projects", "2907", "output", "de_analysis", "Find Markers"), recursive = TRUE, showWarnings = FALSE)
+dir.create(here("R Projects", "2907", "output", "de_analysis", "Presto"), recursive = TRUE, showWarnings = FALSE)
+dir.create(here("R Projects", "2907", "output", "de_analysis", "t.test"), recursive = TRUE, showWarnings = FALSE)
 ```
 
 ### Visualisation
 
 ```{r}
-dir.create(here("R Projects", "2107claude", "output", "visualisation", "box plots"), recursive = TRUE, showWarnings = FALSE)
-dir.create(here("R Projects", "2107claude", "output", "visualisation", "complex heatmaps"), recursive = TRUE, showWarnings = FALSE)
-dir.create(here("R Projects", "2107claude", "output", "visualisation", "nebulosa"), recursive = TRUE, showWarnings = FALSE)
-dir.create(here("R Projects", "2107claude", "output", "visualisation", "violin plots"), recursive = TRUE, showWarnings = FALSE)
-dir.create(here("R Projects", "2107claude", "output", "visualisation", "volcano"), recursive = TRUE, showWarnings = FALSE)
+dir.create(here("R Projects", "2907", "output", "visualisation", "box plots"), recursive = TRUE, showWarnings = FALSE)
+dir.create(here("R Projects", "2907", "output", "visualisation", "complex heatmaps"), recursive = TRUE, showWarnings = FALSE)
+dir.create(here("R Projects", "2907", "output", "visualisation", "nebulosa"), recursive = TRUE, showWarnings = FALSE)
+dir.create(here("R Projects", "2907", "output", "visualisation", "violin plots"), recursive = TRUE, showWarnings = FALSE)
+dir.create(here("R Projects", "2907", "output", "visualisation", "volcano"), recursive = TRUE, showWarnings = FALSE)
 ```
 
 # Import & Pre-processing of Data
