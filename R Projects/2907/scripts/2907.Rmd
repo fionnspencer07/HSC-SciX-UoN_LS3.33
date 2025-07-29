@@ -27,13 +27,14 @@ knitr::opts_chunk$set(
     out.width = "90%",       # Sets the width of the output image or plot to 90% of the available width 
     out.extra = "keepaspectratio=true" # Adds extra options to the output, preserving aspect ratio
 )
-
-# Set global option for future package (important for large parallel computations like Seurat/MAST)
-mib <- 9000*1024^2 # 9GB in bytes
-options(future.globals.maxSize = mib) 
 ```
+```{r}
+# Set up parallel processing for CellChat or other parallelized tasks
+library(future)
+plan("multisession", workers = 10)
+options(future.globals.maxSize = 10240 * 1024^2)  # 10 GB memory cap
 
-
+```
 
 ```{r}
 library(here)
@@ -166,9 +167,9 @@ base::saveRDS(seu_NKT_focused, file = here("Data", "seu_NKT_focused.rds") )
 seu_NKT_focused <- readRDS(here("Data", "seu_NKT_focused.rds"))
 ```
 
-# Differential Gene Expression Analysis
 
-## T Cells
+
+### T Cell Subset
 
 ```{r, cache=FALSE}
 seu_T <- subset(seu_NKT_focused, subset = T_clusters %in% "T_cells")
