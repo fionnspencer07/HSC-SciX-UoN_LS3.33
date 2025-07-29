@@ -232,6 +232,11 @@ dittoRidgePlot(seu_T, "S1pr1", group.by = "treatment", split.by = "tissue")
 ## Enhanced Volcano Plots
 
 ## Nebulosa
+## Seurat T Cluster
+```{r}
+Nebulosa::plot_density(seu_T, "S1pr1") + 
+    facet_wrap(.~seu_T$sample_name, ncol = 3) + theme_void()
+```
 
 
 
