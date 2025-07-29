@@ -28,13 +28,7 @@ knitr::opts_chunk$set(
     out.extra = "keepaspectratio=true" # Adds extra options to the output, preserving aspect ratio
 )
 ```
-```{r}
-# Set up parallel processing for CellChat or other parallelized tasks
-library(future)
-plan("multisession", workers = 10)
-options(future.globals.maxSize = 10240 * 1024^2)  # 10 GB memory cap
 
-```
 
 ```{r}
 library(here)
@@ -55,9 +49,19 @@ message("seed has been set to 210825 ")
 source(here("Custom R Functions and Scripts", "init_packages.R"))
 ```
 
-# Configuration
+## Parallelisation 
 
-## Custom Colours
+```{r}
+# Set up parallel processing for CellChat or other parallelized tasks
+library(future)
+plan("multisession", workers = 10)
+options(future.globals.maxSize = 10240 * 1024^2)  # 10 GB memory cap
+
+```
+
+## Configuration
+
+### Custom Colours
 
 ```{r}
 # Custom colors
@@ -92,11 +96,11 @@ dir.create(here("R Projects", "2907", "output", "visualisation", "violin plots")
 dir.create(here("R Projects", "2907", "output", "visualisation", "volcano"), recursive = TRUE, showWarnings = FALSE)
 ```
 
-# Import & Pre-processing of Data
+## Import & Pre-processing of Data
 
-## Load RDS file
+### Load RDS file
 
-### Load Original RDS
+#### Load Original RDS
 
 Importing PhD Clara Savary's RDS & Initialising the object as a Seurat Object
 
@@ -105,7 +109,7 @@ Importing PhD Clara Savary's RDS & Initialising the object as a Seurat Object
 seu <- readRDS(here("Data",          "seu_NKT_blood_mouse_PPK_ONC_harmony_integrated_filtered_v2_20231_20236_annot.rds"))
 ```
 
-### Subset
+#### Subset
 
 Initial Subset to isolate T Cells, Natural Killer T Cells and Natural Killer Cells and label
 
@@ -113,7 +117,7 @@ Initial Subset to isolate T Cells, Natural Killer T Cells and Natural Killer Cel
 seu_NKT <- subset(seu, subset = cell_types %in% c("T_cells", "NK_cells", "NKT_cells"))
 ```
 
-### Subset Dataset Again
+#### Subset Dataset Again
 
 Second Subset -\> subsetting to remove treatment conditions involving theraputics as this is outside the bounds of the scope of the investigation.
 
@@ -169,8 +173,66 @@ seu_NKT_focused <- readRDS(here("Data", "seu_NKT_focused.rds"))
 
 
 
-### T Cell Subset
+### T Cell Subset 
 
 ```{r, cache=FALSE}
 seu_T <- subset(seu_NKT_focused, subset = T_clusters %in% "T_cells")
 ```
+# QC
+
+Already completed by PhD CS
+
+
+# Cell Type Annotation
+
+```{r}
+
+```
+
+
+# Dim Reduction & Clustering
+
+# Differential Expression Analysis 
+MAST, Find Markers, Presto and deseq2/edgeR
+
+
+# Receptor Localistion & Surface vs Total Expression
+
+
+
+# Ligand–Receptor Interaction Analysis
+
+# Trajectory Analysis/Pseudotime
+```{r, cache=TRUE, eval=FALSE}
+cds <- as.cell_data_set(seu_NKT_focused)
+cds <- preprocess_cds(cds, num_dim = 50)
+cds <- cluster_cells(cds, reduction_method = "UMAP")  # <-- fix here
+cds <- reduce_dimension(cds, reduction_method = "UMAP")
+cds <- learn_graph(cds)
+plot_cells(cds, color_cells_by = "pseudotime")
+
+```
+
+
+# Vis
+
+## Dittoplot
+
+```{r}
+dittoPlot(seu_T, "S1pr1", group.by = "treatment", split.by = "tissue")
+```
+
+```{r}
+dittoBoxPlot(seu_T, "S1pr1", group.by = "treatment", split.by = "tissue")
+```
+```{r}
+dittoRidgePlot(seu_T, "S1pr1", group.by = "treatment", split.by = "tissue")
+```
+
+## Enhanced Volcano Plots
+
+## Nebulosa
+
+
+
+
