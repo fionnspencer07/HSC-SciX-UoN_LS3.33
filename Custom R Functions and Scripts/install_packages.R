@@ -67,6 +67,8 @@ remotes::install_github("bnprks/BPCells/r", dependencies = TRUE)
 devtools::install_github("cole-trapnell-lab/monocle3", dependencies = TRUE)
 devtools::install_github("jokergoo/ComplexHeatmap", dependencies = TRUE)
 devtools::install_github("jinworks/CellChat", dependencies = TRUE)
+remotes::install_github('satijalab/seurat-wrappers')
+
 
 # Seurat (CRAN)
 install.packages("Seurat", dependencies = TRUE)
