@@ -968,9 +968,368 @@ saveWorkbook(
 )
 ```
 
-# Receptor Localistion & Surface vs Total Expression
+# Gene Set Enrichment Analysis
+```{r}
 
-# Ligand–Receptor Interaction Analysis
+# Create GSEA output directories
+dir.create(here("R Projects", "2907", "output", "gsea"), recursive = TRUE, showWarnings = FALSE)
+dir.create(here("R Projects", "2907", "output", "gsea", "plots"), recursive = TRUE, showWarnings = FALSE)
+dir.create(here("R Projects", "2907", "output", "gsea", "results"), recursive = TRUE, showWarnings = FALSE)
+
+## 1. Prepare Gene Sets for Mouse
+
+# Get mouse gene sets from MSigDB
+# Hallmark pathways (50 well-defined biological states/processes)
+hallmark_sets <- msigdbr(species = "Mus musculus", category = "H")
+
+# Immunologic signatures (immune-related gene sets)
+immunologic_sets <- msigdbr(species = "Mus musculus", category = "C7")
+
+# GO Biological Process
+go_bp_sets <- msigdbr(species = "Mus musculus", category = "C5", subcategory = "GO:BP")
+
+# KEGG pathways
+kegg_sets <- msigdbr(species = "Mus musculus", category = "C2", subcategory = "KEGG_LEGACY")
+
+# Combine into list format for fgsea
+prepare_gene_sets <- function(msigdb_df) {
+  gene_sets <- split(msigdb_df$gene_symbol, msigdb_df$gs_name)
+  return(gene_sets)
+}
+
+hallmark_list <- prepare_gene_sets(hallmark_sets)
+immunologic_list <- prepare_gene_sets(immunologic_sets)
+go_bp_list <- prepare_gene_sets(go_bp_sets)
+kegg_list <- prepare_gene_sets(kegg_sets)
+
+## 2. Function to run GSEA analysis
+
+run_gsea_analysis <- function(deg_results, gene_sets, comparison_name, set_name) {
+  
+  cat("Running GSEA for", comparison_name, "with", set_name, "gene sets\n")
+  
+  # Prepare ranked gene list (rank by log2FC * -log10(pvalue))
+  # This gives higher ranks to genes with large fold changes and low p-values
+  deg_results <- deg_results %>%
+    filter(!is.na(avg_log2FC) & !is.na(p_val)) %>%
+    mutate(rank_metric = avg_log2FC * -log10(p_val + 1e-10)) %>%  # Add small value to avoid log(0)
+    arrange(desc(rank_metric))
+  
+  # Create named vector for fgsea
+  gene_ranks <- setNames(deg_results$rank_metric, deg_results$gene)
+  
+  # Remove duplicates (keep highest ranking)
+  gene_ranks <- gene_ranks[!duplicated(names(gene_ranks))]
+  
+  if (length(gene_ranks) < 10) {
+    cat("Warning: Too few genes for GSEA analysis in", comparison_name, "\n")
+    return(NULL)
+  }
+  
+  # Run fgsea
+  gsea_results <- fgsea(
+    pathways = gene_sets,
+    stats = gene_ranks,
+    minSize = 10,      # Minimum genes in pathway
+    maxSize = 500,     # Maximum genes in pathway
+    nperm = 10000,     # Number of permutations
+    eps = 0            # For exact p-values
+  )
+  
+  # Add comparison and set info
+  gsea_results$comparison <- comparison_name
+  gsea_results$gene_set_type <- set_name
+  
+  # Sort by NES (Normalized Enrichment Score)
+  gsea_results <- gsea_results[order(gsea_results$NES, decreasing = TRUE)]
+  
+  return(gsea_results)
+}
+
+## 3. Function to create GSEA plots
+
+create_gsea_plots <- function(gsea_results, comparison_name, set_name, top_n = 10) {
+  
+  if (is.null(gsea_results) || nrow(gsea_results) == 0) {
+    return(NULL)
+  }
+  
+  # Filter significant results
+  sig_results <- gsea_results[gsea_results$padj < 0.05]
+  
+  if (nrow(sig_results) == 0) {
+    cat("No significant pathways found for", comparison_name, set_name, "\n")
+    return(NULL)
+  }
+  
+  # Take top upregulated and downregulated pathways
+  top_pos <- head(sig_results[sig_results$NES > 0], top_n/2)
+  top_neg <- head(sig_results[sig_results$NES < 0][order(sig_results[sig_results$NES < 0]$NES)], top_n/2)
+  
+  plot_data <- rbind(top_pos, top_neg)
+  
+  if (nrow(plot_data) == 0) {
+    return(NULL)
+  }
+  
+  # Clean pathway names for plotting
+  plot_data$pathway_clean <- gsub("HALLMARK_|GO_|KEGG_", "", plot_data$pathway)
+  plot_data$pathway_clean <- gsub("_", " ", plot_data$pathway_clean)
+  plot_data$pathway_clean <- stringr::str_to_title(plot_data$pathway_clean)
+  
+  # Truncate long names
+  plot_data$pathway_clean <- ifelse(
+    nchar(plot_data$pathway_clean) > 50,
+    paste0(substr(plot_data$pathway_clean, 1, 47), "..."),
+    plot_data$pathway_clean
+  )
+  
+  # Create the plot
+  p <- ggplot(plot_data, aes(x = reorder(pathway_clean, NES), y = NES)) +
+    geom_col(aes(fill = NES > 0), width = 0.7) +
+    scale_fill_manual(
+      values = c("TRUE" = "#d73027", "FALSE" = "#4575b4"),
+      labels = c("Downregulated", "Upregulated"),
+      name = "Direction"
+    ) +
+    coord_flip() +
+    labs(
+      title = paste("GSEA Results:", comparison_name),
+      subtitle = paste(set_name, "gene sets"),
+      x = "Pathway",
+      y = "Normalized Enrichment Score (NES)",
+      caption = paste("Showing top", nrow(plot_data), "significant pathways (FDR < 0.05)")
+    ) +
+    theme_bw() +
+    theme(
+      plot.title = element_text(size = 14, face = "bold"),
+      plot.subtitle = element_text(size = 12),
+      axis.text.y = element_text(size = 10),
+      axis.text.x = element_text(size = 11),
+      axis.title = element_text(size = 12, face = "bold"),
+      legend.title = element_text(size = 11, face = "bold"),
+      legend.text = element_text(size = 10),
+      panel.grid.major.y = element_blank(),
+      panel.grid.minor = element_blank()
+    )
+  
+  return(p)
+}
+
+## 4. Function to run complete GSEA analysis for all comparisons
+
+run_complete_gsea <- function() {
+  
+  # Define gene set collections to analyze
+  gene_set_collections <- list(
+    "Hallmark" = hallmark_list,
+    "Immunologic" = immunologic_list,
+    "GO_BP" = go_bp_list,
+    "KEGG" = kegg_list
+  )
+  
+  # Initialize results storage
+  all_gsea_results <- list()
+  
+  # Create Excel workbook for results
+  wb_gsea <- createWorkbook()
+  
+  for (set_name in names(gene_set_collections)) {
+    
+    cat("\n", rep("=", 60), "\n")
+    cat("ANALYZING", set_name, "GENE SETS\n")
+    cat(rep("=", 60), "\n")
+    
+    # Create worksheet for this gene set collection
+    addWorksheet(wb_gsea, sheetName = set_name)
+    collection_results <- data.frame()
+    
+    for (comparison in names(pairwise_comparisons)) {
+      
+      # Check if we have DEG results for this comparison
+      # You'll need to load your DEG results here
+      # For now, I'll show the structure - you'll need to adapt based on your DEG results
+      
+      # Example: Load DEG results (adapt this to your actual results)
+      tryCatch({
+        # You could load from your Excel files or re-run FindMarkers
+        deg_file <- here("R Projects", "2907", "output", "de_analysis", "Find Markers", "DE_wilcox-limma_filtered.xlsx")
+        
+        if (file.exists(deg_file)) {
+          # Read the specific comparison sheet
+          deg_results <- readxl::read_excel(deg_file, sheet = comparison)
+          
+          # Run GSEA
+          gsea_result <- run_gsea_analysis(deg_results, gene_set_collections[[set_name]], comparison, set_name)
+          
+          if (!is.null(gsea_result)) {
+            # Store results
+            all_gsea_results[[paste(comparison, set_name, sep = "_")]] <- gsea_result
+            
+            # Add to combined results
+            gsea_result_df <- as.data.frame(gsea_result)
+            collection_results <- rbind(collection_results, gsea_result_df)
+            
+            # Create and save plot
+            plot <- create_gsea_plots(gsea_result, comparison, set_name)
+            
+            if (!is.null(plot)) {
+              # Save plot
+              plot_filename <- paste0(comparison, "_", set_name, "_GSEA.png")
+              ggsave(
+                filename = file.path(here("R Projects", "2907", "output", "gsea", "plots"), plot_filename),
+                plot = plot,
+                width = 12, height = 8, dpi = 300, bg = "white"
+              )
+              
+              # Also save as SVG
+              plot_filename_svg <- paste0(comparison, "_", set_name, "_GSEA.svg")
+              ggsave(
+                filename = file.path(here("R Projects", "2907", "output", "gsea", "plots"), plot_filename_svg),
+                plot = plot,
+                width = 12, height = 8, bg = "white"
+              )
+              
+              cat("✓ GSEA plot saved for", comparison, "-", set_name, "\n")
+            }
+            
+            # Print summary
+            sig_pathways <- sum(gsea_result$padj < 0.05, na.rm = TRUE)
+            cat("  - Significant pathways:", sig_pathways, "\n")
+          }
+        }
+      }, error = function(e) {
+        cat("Error processing", comparison, "for", set_name, ":", e$message, "\n")
+      })
+    }
+    
+    # Write combined results for this gene set collection to Excel
+    if (nrow(collection_results) > 0) {
+      writeData(wb_gsea, sheet = set_name, x = collection_results)
+    }
+  }
+  
+  # Save Excel workbook
+  saveWorkbook(wb_gsea, 
+               file = here("R Projects", "2907", "output", "gsea", "results", "GSEA_all_results.xlsx"), 
+               overwrite = TRUE)
+  
+  return(all_gsea_results)
+}
+
+## 5. Create summary heatmap of top pathways
+
+create_gsea_heatmap <- function(all_results) {
+  
+  # Extract significant results across all comparisons
+  sig_results <- data.frame()
+  
+  for (result_name in names(all_results)) {
+    result <- all_results[[result_name]]
+    if (!is.null(result)) {
+      sig_pathways <- result[result$padj < 0.05]
+      if (nrow(sig_pathways) > 0) {
+        sig_results <- rbind(sig_results, sig_pathways)
+      }
+    }
+  }
+  
+  if (nrow(sig_results) == 0) {
+    cat("No significant pathways found for heatmap\n")
+    return(NULL)
+  }
+  
+  # Find pathways that appear in multiple comparisons
+  pathway_counts <- table(sig_results$pathway)
+  common_pathways <- names(pathway_counts)[pathway_counts >= 2]  # Appear in at least 2 comparisons
+  
+  if (length(common_pathways) == 0) {
+    # If no common pathways, take top pathways by absolute NES
+    common_pathways <- sig_results[order(abs(sig_results$NES), decreasing = TRUE)]$pathway[1:min(20, nrow(sig_results))]
+  }
+  
+  # Create matrix for heatmap
+  heatmap_data <- sig_results[sig_results$pathway %in% common_pathways, c("pathway", "comparison", "NES")]
+  heatmap_matrix <- reshape2::dcast(heatmap_data, pathway ~ comparison, value.var = "NES", fill = 0)
+  
+  # Convert to matrix
+  rownames(heatmap_matrix) <- heatmap_matrix$pathway
+  heatmap_matrix <- heatmap_matrix[, -1]
+  heatmap_matrix <- as.matrix(heatmap_matrix)
+  
+  # Clean pathway names
+  rownames(heatmap_matrix) <- gsub("HALLMARK_|GO_|KEGG_", "", rownames(heatmap_matrix))
+  rownames(heatmap_matrix) <- gsub("_", " ", rownames(heatmap_matrix))
+  
+  # Create heatmap
+  if (nrow(heatmap_matrix) > 1 && ncol(heatmap_matrix) > 1) {
+    
+    # Color scheme
+    col_fun <- circlize::colorRamp2(
+      c(-max(abs(heatmap_matrix)), 0, max(abs(heatmap_matrix))),
+      c("#4575b4", "white", "#d73027")
+    )
+    
+    ht <- ComplexHeatmap::Heatmap(
+      heatmap_matrix,
+      name = "NES",
+      col = col_fun,
+      row_title = "Pathways",
+      column_title = "Comparisons",
+      row_names_gp = gpar(fontsize = 10),
+      column_names_gp = gpar(fontsize = 10),
+      column_names_rot = 45,
+      heatmap_legend_param = list(title = "NES", title_gp = gpar(fontsize = 12, fontface = "bold")),
+      cell_fun = function(j, i, x, y, width, height, fill) {
+        if (abs(heatmap_matrix[i, j]) > 1) {  # Only show values for |NES| > 1
+          grid.text(sprintf("%.1f", heatmap_matrix[i, j]), x, y, gp = gpar(fontsize = 8))
+        }
+      }
+    )
+    
+    # Save heatmap
+    png(file.path(here("R Projects", "2907", "output", "gsea", "plots"), "GSEA_summary_heatmap.png"),
+        width = 14, height = 10, units = "in", res = 300)
+    draw(ht)
+    dev.off()
+    
+    svg(file.path(here("R Projects", "2907", "output", "gsea", "plots"), "GSEA_summary_heatmap.svg"),
+        width = 14, height = 10)
+    draw(ht)
+    dev.off()
+    
+    cat("✓ GSEA summary heatmap saved\n")
+    return(ht)
+  }
+  
+  return(NULL)
+}
+
+## 6. Run the complete analysis
+
+# First, make sure you have your differential expression results
+# Then run the GSEA analysis
+cat("Starting GSEA analysis...\n")
+gsea_results <- run_complete_gsea()
+
+# Create summary heatmap
+if (length(gsea_results) > 0) {
+  heatmap <- create_gsea_heatmap(gsea_results)
+}
+
+cat("\n", rep("=", 60), "\n")
+cat("GSEA ANALYSIS COMPLETED!\n")
+cat(rep("=", 60), "\n")
+cat("Results saved to:", here("R Projects", "2907", "output", "gsea"), "\n")
+cat("- Individual plots: plots/ directory\n")
+cat("- Combined results: results/GSEA_all_results.xlsx\n")
+cat("- Summary heatmap: plots/GSEA_summary_heatmap.png\n")
+```
+
+
+  <!-- # Receptor Localistion & Surface vs Total Expression -->
+
+  <!-- # Ligand–Receptor Interaction Analysis -->
 
 # Trajectory Analysis/Pseudotime
 
