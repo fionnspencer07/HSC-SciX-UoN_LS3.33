@@ -29,10 +29,10 @@ knitr::opts_chunk$set(
 )
 ```
 
-
 ```{r}
 library(here)
 ```
+
 # Set Up Working Environment
 
 ## Set Seed
@@ -49,7 +49,7 @@ message("seed has been set to 210825 ")
 source(here("Custom R Functions and Scripts", "init_packages.R"))
 ```
 
-## Parallelisation 
+## Parallelisation
 
 ```{r}
 # Set up parallel processing for CellChat or other parallelized tasks
@@ -171,38 +171,809 @@ base::saveRDS(seu_NKT_focused, file = here("Data", "seu_NKT_focused.rds") )
 seu_NKT_focused <- readRDS(here("Data", "seu_NKT_focused.rds"))
 ```
 
-
-
-### T Cell Subset 
+### T Cell Subset
 
 ```{r, cache=FALSE}
 seu_T <- subset(seu_NKT_focused, subset = T_clusters %in% "T_cells")
 ```
+
 # QC
 
 Already completed by PhD CS
 
-
 # Cell Type Annotation
 
-```{r}
+```{r, cache.lazy=FALSE}
+# UMAP plot showing cluster identities
+p_ident <- DimPlot(
+  seu_NKT_focused,
+  label     = TRUE,
+  repel     = TRUE,
+  group.by  = "T_clusters",
+  reduction = "umap_harmony_SCT"
+) + NoLegend()
+
+# Display the plot
+print(p_ident)
+```
+
+```{r, cache.lazy=FALSE}
+# Extract RNA assay data to use as SingleR test input
+expression <- GetAssayData(seu_NKT_focused[["RNA"]], layer = "data")
+
+# Use tree-based cluster identities for annotation
+cluster_info <- seu_NKT_focused@meta.data$T_clusters
+
+# Load reference atlases for annotation
+atlas_set <- list(
+  "MRD"    = celldex::MouseRNAseqData(),
+  "DICED"  = celldex::DatabaseImmuneCellExpressionData(),
+  "IMMGEN" = celldex::ImmGenData()
+)
+
+# Loop over each reference set and label level
+sapply(names(atlas_set), function(x) {
+  
+  for (label in c("label.main", "label.fine")) {
+    
+    # Run SingleR on clustered data
+    prediction <- SingleR(
+      test     = expression,
+      ref      = atlas_set[[x]],
+      labels   = atlas_set[[x]][[label]],
+      clusters = cluster_info
+    )
+
+    # Plot annotation scores as a heatmap
+    p_singleR <- plotScoreHeatmap(prediction, show_colnames = TRUE) %>% as.ggplot()
+
+    # Display UMAP and annotation heatmap side-by-side
+    p <- grid.arrange(grobs = list(p_ident, p_singleR), ncol = 2)
+    p
+    
+  }
+  
+})
 
 ```
 
-
 # Dim Reduction & Clustering
 
-# Differential Expression Analysis 
+Clara already created Dim Plots defined in her Seurat Object - all we have to do now is run them if we need to make more (we don't) we can
+
+```{r}
+# RNA Assay ====
+## PCA ====
+DimPlot(seu_NKT_focused, reduction = "pca_RNA")
+## UMAP ====
+DimPlot(seu_NKT_focused, reduction = "umap_RNA")
+## TSNE ====
+DimPlot(seu_NKT_focused, reduction = "tsne_RNA")
+# PCA
+DimPlot(seu_NKT_focused, reduction = "pca")
+# SCT - SC Transform (Normalisation Technique) Assay ====
+## UMAP SCT ====
+DimPlot(seu_NKT_focused, reduction = "umap_SCT")
+## Harmony SCT ====
+DimPlot(seu_NKT_focused, reduction = "harmony_SCT")
+## UMAP Harmony SCT ====
+DimPlot(seu_NKT_focused, reduction = "umap_harmony_SCT")
+```
+
+# Differential Expression Analysis
+
 MAST, Find Markers, Presto and deseq2/edgeR
 
+# T Clusters
+
+Using the Seu_T Seurat Object to exclude NKT, NK Cells
+
+## Presto
+
+### Wilcoxon
+
+```{r, cache=TRUE}
+
+#Define the gene list 
+selected_genes <- c("S1pr1", "S1pr2", "S1pr3", "S1pr4", "S1pr5",
+                    "Ccr7", "Sell", "Cd69", "Klf2", "Cxcr4", "Cd44", "Itgae", "Itgal")
+
+pairwise_comparisons <- list(
+  "NAIVE_WB_vs_NAIVE_BM"     = c("Naive_WB", "Naive_BM"),
+  "NAIVE_WB_vs_SHAM_WB"      = c("Naive_WB", "Sham_WB"),
+  "NAIVE_WB_vs_SHAM_BM"      = c("Naive_WB", "Sham_BM"),
+  "NAIVE_WB_vs_UT_WB"        = c("Naive_WB", "UT_WB"),
+  "NAIVE_WB_vs_UT_BM"        = c("Naive_WB", "UT_BM"),
+  "NAIVE_BM_vs_SHAM_WB"      = c("Naive_BM", "Sham_WB"),
+  "NAIVE_BM_vs_SHAM_BM"      = c("Naive_BM", "Sham_BM"),
+  "NAIVE_BM_vs_UT_WB"        = c("Naive_BM", "UT_WB"),
+  "NAIVE_BM_vs_UT_BM"        = c("Naive_BM", "UT_BM"),
+  "SHAM_WB_vs_SHAM_BM"       = c("Sham_WB", "Sham_BM"),
+  "SHAM_WB_vs_UT_WB"         = c("Sham_WB", "UT_WB"),
+  "SHAM_WB_vs_UT_BM"         = c("Sham_WB", "UT_BM"),
+  "SHAM_BM_vs_UT_WB"         = c("Sham_BM", "UT_WB"),
+  "SHAM_BM_vs_UT_BM"         = c("Sham_BM", "UT_BM"),
+  "UT_WB_vs_UT_BM"           = c("UT_WB", "UT_BM")
+)
+
+wb <- createWorkbook()
+
+for (i in names(pairwise_comparisons)) {
+  
+  deg_T <- wilcoxauc(seu_T, group_by = "sample_name", groups_use = pairwise_comparisons[[i]])
+  
+  addWorksheet(wb, sheetName = i)
+  
+  deg_T <- deg_T %>%
+    filter(group == pairwise_comparisons[[i]][[1]]) %>%
+    filter(feature %in% selected_genes) %>%   # <- Filter only your selected genes
+    arrange(group, -logFC)
+  
+  writeData(wb, sheet = i, x = deg_T)
+}
+
+saveWorkbook(wb, here("R Projects", "2907", "output", "de_analysis", "Presto", "DE_presto-wilcoxauc_filtered.xlsx"), overwrite = TRUE)
+
+```
+
+## Find Markers
+
+#### Wilcoxon Limma
+
+```{r, cache=TRUE}
+# Define the gene list you want to focus on
+selected_genes <- c("S1pr1", "S1pr2", "S1pr3", "S1pr4", "S1pr5", 
+                    "Ccr7", "Sell", "Cd69", "Klf2", "Cxcr4", "Cd44", "Itgae", "Itgal")
+
+pairwise_comparisons <- list(
+  "NAIVE_WB_vs_NAIVE_BM"     = c("Naive_WB", "Naive_BM"),
+  "NAIVE_WB_vs_SHAM_WB"      = c("Naive_WB", "Sham_WB"),
+  "NAIVE_WB_vs_SHAM_BM"      = c("Naive_WB", "Sham_BM"),
+  "NAIVE_WB_vs_UT_WB"        = c("Naive_WB", "UT_WB"),
+  "NAIVE_WB_vs_UT_BM"        = c("Naive_WB", "UT_BM"),
+  "NAIVE_BM_vs_SHAM_WB"      = c("Naive_BM", "Sham_WB"),
+  "NAIVE_BM_vs_SHAM_BM"      = c("Naive_BM", "Sham_BM"),
+  "NAIVE_BM_vs_UT_WB"        = c("Naive_BM", "UT_WB"),
+  "NAIVE_BM_vs_UT_BM"        = c("Naive_BM", "UT_BM"),
+  "SHAM_WB_vs_SHAM_BM"       = c("Sham_WB", "Sham_BM"),
+  "SHAM_WB_vs_UT_WB"         = c("Sham_WB", "UT_WB"),
+  "SHAM_WB_vs_UT_BM"         = c("Sham_WB", "UT_BM"),
+  "SHAM_BM_vs_UT_WB"         = c("Sham_BM", "UT_WB"),
+  "SHAM_BM_vs_UT_BM"         = c("Sham_BM", "UT_BM"),
+  "UT_WB_vs_UT_BM"           = c("UT_WB", "UT_BM")
+)
+
+wb <- createWorkbook()
+
+for (i in names(pairwise_comparisons)) {
+  
+  deg_T <- FindMarkers(seu_T, group.by = "sample_name", ident.1 = pairwise_comparisons[[i]][1], ident.2 = pairwise_comparisons[[i]][2], test.use = "wilcox_limma")
+  
+  addWorksheet(wb, sheetName = i)
+  
+  deg_T <- deg_T %>%
+    filter(rownames(.) %in% selected_genes) %>%   # <- Filter only your selected genes
+    arrange(-avg_log2FC)
+  
+  # Add gene names as a column
+  deg_T$gene <- rownames(deg_T)
+  deg_T <- deg_T %>% dplyr::select(gene, dplyr::everything())
+  
+  writeData(wb, sheet = i, x = deg_T)
+}
+
+saveWorkbook(wb, here("R Projects", "2907", "output", "de_analysis", "Find Markers", "DE_wilcox-limma_filtered.xlsx"), overwrite = TRUE)
+
+```
+### Deseq2 & EdgeR
+##### Missing Dependencies for  chunk
+```{r}
+# 1. Create the missing create_pseudobulk.R function in your code
+create_pseudobulk_with_replicates <- function(seurat_obj, group_col, n_replicates = 3) {
+  # Get the raw count matrix
+  counts <- GetAssayData(seurat_obj, assay = "RNA", layer = "counts")
+  
+  # Get metadata
+  metadata <- seurat_obj@meta.data
+  
+  # Get unique groups
+  unique_groups <- unique(metadata[[group_col]])
+  
+  # Initialize list to store pseudobulk data
+  pseudobulk_list <- list()
+  
+  for (group in unique_groups) {
+    # Get cells for this group
+    group_cells <- rownames(metadata)[metadata[[group_col]] == group]
+    
+    if (length(group_cells) > 0) {
+      # Get counts for this group
+      group_counts <- counts[, group_cells, drop = FALSE]
+      
+      # Create replicates by randomly sampling cells
+      cells_per_replicate <- floor(length(group_cells) / n_replicates)
+      
+      if (cells_per_replicate > 0) {
+        # Shuffle cells
+        shuffled_cells <- sample(group_cells)
+        
+        for (rep in 1:n_replicates) {
+          start_idx <- (rep - 1) * cells_per_replicate + 1
+          if (rep == n_replicates) {
+            # Last replicate gets remaining cells
+            end_idx <- length(shuffled_cells)
+          } else {
+            end_idx <- rep * cells_per_replicate
+          }
+          
+          replicate_cells <- shuffled_cells[start_idx:end_idx]
+          
+          if (length(replicate_cells) > 0) {
+            # Sum counts across cells in this replicate
+            replicate_counts <- Matrix::rowSums(group_counts[, replicate_cells, drop = FALSE])
+            
+            # Store in list
+            replicate_name <- paste0(group, "_rep", rep)
+            pseudobulk_list[[replicate_name]] <- replicate_counts
+          }
+        }
+      }
+    }
+  }
+  
+  # Convert to matrix
+  pseudobulk_matrix <- do.call(cbind, pseudobulk_list)
+  
+  return(pseudobulk_matrix)
+}
+
+## 2. Create the missing run_edgeR_comparison function
+run_edgeR_comparison <- function(counts_matrix, sample_info, group1, group2, comparison_name) {
+  
+  cat("\nRunning edgeR analysis for:", comparison_name, "\n")
+  
+  # Filter samples for this comparison
+  samples_to_use <- sample_info$sample[sample_info$group %in% c(group1, group2)]
+  
+  if (length(samples_to_use) < 4) {  # Need at least 2 replicates per group
+    cat("Warning: Not enough samples for comparison", comparison_name, "- found", length(samples_to_use), "samples\n")
+    return(NULL)
+  }
+  
+  # Subset counts and sample info
+  counts_subset <- counts_matrix[, samples_to_use, drop = FALSE]
+  sample_info_subset <- sample_info[sample_info$sample %in% samples_to_use, ]
+  
+  # Create group factor
+  group_factor <- factor(sample_info_subset$group, levels = c(group1, group2))
+  
+  cat("Groups:", levels(group_factor), "\n")
+  cat("Sample distribution:", table(group_factor), "\n")
+  
+  # Create DGEList object
+  dge <- DGEList(counts = counts_subset, group = group_factor)
+  
+  # Filter low count genes
+  keep <- filterByExpr(dge, min.count = 10)
+  dge <- dge[keep, , keep.lib.sizes = FALSE]
+  
+  cat("Kept", sum(keep), "genes after filtering\n")
+  
+  # Normalize library sizes
+  dge <- calcNormFactors(dge)
+  
+  # Create design matrix
+  design <- model.matrix(~ group_factor)
+  
+  # Estimate dispersions
+  dge <- estimateDisp(dge, design)
+  
+  # Fit GLM
+  fit <- glmQLFit(dge, design)
+  
+  # Perform differential expression test
+  qlf <- glmQLFTest(fit, coef = 2)  # Test the group effect
+  
+  # Get results
+  results <- topTags(qlf, n = Inf)$table
+  
+  # Add gene names and filter for selected genes
+  results$gene <- rownames(results)
+  
+  # Define selected genes (you may want to adjust this list)
+  selected_genes <- c("S1pr1", "S1pr2", "S1pr3", "S1pr4", "S1pr5",
+                      "Ccr7", "Sell", "Cd69", "Klf2", "Cxcr4", "Cd44", "Itgae", "Itgal")
+  
+  # Filter for selected genes only
+  results_filtered <- results[results$gene %in% selected_genes, ]
+  
+  # Rename columns for consistency
+  results_filtered <- results_filtered %>%
+    dplyr::select(gene, logFC, logCPM, PValue, FDR) %>%
+    rename(avg_log2FC = logFC, p_val = PValue, p_val_adj = FDR) %>%
+    arrange(-avg_log2FC) %>%
+    filter(!is.na(avg_log2FC))  # Remove genes with NA fold changes
+  
+  cat("Found", nrow(results_filtered), "genes from selected list\n")
+  
+  return(results_filtered)
+}
+```
+
+
+#### deseq2
+
+```{r, cache=TRUE}
+# Load required libraries
+library(DESeq2)
+library(edgeR)
+library(EnhancedVolcano)
+library(openxlsx)
+library(dplyr)
+
+# Create output directories
+dir.create(here("R Projects", "2907", "output", "visualisation", "enhanced_volcano"), recursive = TRUE, showWarnings = FALSE)
+dir.create(here("R Projects", "2907", "output", "visualisation", "enhanced_volcano", "deseq2"), recursive = TRUE, showWarnings = FALSE)
+dir.create(here("R Projects", "2907", "output", "visualisation", "enhanced_volcano", "edgeR"), recursive = TRUE, showWarnings = FALSE)
+
+# Define the gene list you want to focus on
+selected_genes <- c("S1pr1", "S1pr2", "S1pr3", "S1pr4", "S1pr5", 
+                    "Ccr7", "Sell", "Cd69", "Klf2", "Cxcr4", "Cd44", "Itgae", "Itgal")
+
+pairwise_comparisons <- list(
+  "NAIVE_WB_vs_NAIVE_BM"     = c("Naive_WB", "Naive_BM"),
+  "NAIVE_WB_vs_SHAM_WB"      = c("Naive_WB", "Sham_WB"),
+  "NAIVE_WB_vs_SHAM_BM"      = c("Naive_WB", "Sham_BM"),
+  "NAIVE_WB_vs_UT_WB"        = c("Naive_WB", "UT_WB"),
+  "NAIVE_WB_vs_UT_BM"        = c("Naive_WB", "UT_BM"),
+  "NAIVE_BM_vs_SHAM_WB"      = c("Naive_BM", "Sham_WB"),
+  "NAIVE_BM_vs_SHAM_BM"      = c("Naive_BM", "Sham_BM"),
+  "NAIVE_BM_vs_UT_WB"        = c("Naive_BM", "UT_WB"),
+  "NAIVE_BM_vs_UT_BM"        = c("Naive_BM", "UT_BM"),
+  "SHAM_WB_vs_SHAM_BM"       = c("Sham_WB", "Sham_BM"),
+  "SHAM_WB_vs_UT_WB"         = c("Sham_WB", "UT_WB"),
+  "SHAM_WB_vs_UT_BM"         = c("Sham_WB", "UT_BM"),
+  "SHAM_BM_vs_UT_WB"         = c("Sham_BM", "UT_WB"),
+  "SHAM_BM_vs_UT_BM"         = c("Sham_BM", "UT_BM"),
+  "UT_WB_vs_UT_BM"           = c("UT_WB", "UT_BM")
+)
+
+# Create pseudobulk counts matrix and sample info
+cat("Creating pseudobulk counts matrix with replicates for DESeq2...\n")
+
+# Check if seu_T exists
+if (!exists("seu_T")) {
+  stop("seu_T object not found. Make sure it's loaded before running this chunk.")
+}
+
+# Create pseudobulk data
+pseudobulk_counts <- create_pseudobulk_with_replicates(seu_T, "sample_name", n_replicates = 3)
+
+# Create sample info
+sample_info <- data.frame(
+  sample = colnames(pseudobulk_counts),
+  stringsAsFactors = FALSE
+)
+
+sample_info$original_sample <- sapply(strsplit(sample_info$sample, "_rep"), function(x) x[1])
+sample_info$treatment <- sapply(strsplit(sample_info$original_sample, "_"), function(x) x[1])
+sample_info$tissue <- sapply(strsplit(sample_info$original_sample, "_"), function(x) x[2])
+sample_info$group <- sample_info$original_sample
+
+cat("Sample info created successfully\n")
+cat("Available groups:", unique(sample_info$group), "\n")
+
+# Function to run DESeq2 analysis for a pairwise comparison
+run_DESeq2_comparison <- function(counts_matrix, sample_info, group1, group2, comparison_name) {
+  
+  cat("\nRunning DESeq2 analysis for:", comparison_name, "\n")
+  
+  # Filter samples for this comparison
+  samples_to_use <- sample_info$sample[sample_info$group %in% c(group1, group2)]
+  
+  if (length(samples_to_use) < 4) {  # Need at least 2 replicates per group
+    cat("Warning: Not enough samples for comparison", comparison_name, "- found", length(samples_to_use), "samples\n")
+    return(NULL)
+  }
+  
+  # Subset counts and sample info
+  counts_subset <- counts_matrix[, samples_to_use, drop = FALSE]
+  sample_info_subset <- sample_info[sample_info$sample %in% samples_to_use, ]
+  
+  # Ensure counts are integers for DESeq2
+  counts_subset <- round(counts_subset)
+  
+  # Create colData for DESeq2
+  colData <- data.frame(
+    sample = sample_info_subset$sample,
+    group = factor(sample_info_subset$group, levels = c(group2, group1)), # Reference level first
+    row.names = sample_info_subset$sample
+  )
+  
+  cat("Groups:", levels(colData$group), "\n")
+  cat("Reference group:", group2, "\n")
+  
+  # Create DESeq2 dataset
+  dds <- DESeqDataSetFromMatrix(
+    countData = counts_subset,
+    colData = colData,
+    design = ~ group
+  )
+  
+  # Filter low count genes
+  keep <- rowSums(counts(dds)) >= 10
+  dds <- dds[keep,]
+  
+  cat("Kept", sum(keep), "genes after filtering\n")
+  
+  # Run DESeq2 analysis
+  dds <- DESeq(dds, quiet = TRUE)
+  
+  # Get results (group1 vs group2, with group2 as reference)
+  res <- results(dds, contrast = c("group", group1, group2), alpha = 0.05)
+  
+  # Convert to data frame
+  results_df <- as.data.frame(res)
+  results_df$gene <- rownames(results_df)
+  
+  # Filter for selected genes only
+  results_filtered <- results_df[results_df$gene %in% selected_genes, ]
+  
+  # Rename columns for consistency with other methods
+  results_filtered <- results_filtered %>%
+    dplyr::select(gene, log2FoldChange, baseMean, pvalue, padj) %>%
+    rename(avg_log2FC = log2FoldChange, p_val = pvalue, p_val_adj = padj) %>%
+    arrange(-avg_log2FC) %>%
+    filter(!is.na(avg_log2FC))  # Remove genes with NA fold changes
+  
+  cat("Found", nrow(results_filtered), "genes from selected list\n")
+  
+  return(results_filtered)
+}
+
+# Initialize Excel workbook for DESeq2 results
+wb_deseq2 <- createWorkbook()
+
+# Run DESeq2 analysis and generate volcano plots for each comparison
+for (i in names(pairwise_comparisons)) {
+  
+  group1 <- pairwise_comparisons[[i]][1]
+  group2 <- pairwise_comparisons[[i]][2]
+  
+  cat("\n", rep("=", 50), "\n")
+  cat("Processing DESeq2:", i, "\n")
+  cat(rep("=", 50), "\n")
+  
+  # Check if both groups exist
+  available_groups <- unique(sample_info$group)
+  if (!group1 %in% available_groups || !group2 %in% available_groups) {
+    cat("Skipping", i, "- one or both groups not found in data\n")
+    cat("Available groups:", paste(available_groups, collapse = ", "), "\n")
+    next
+  }
+  
+  # Run DESeq2 analysis for this comparison
+  tryCatch({
+    deg_T <- run_DESeq2_comparison(pseudobulk_counts, sample_info, group1, group2, i)
+    
+    if (!is.null(deg_T) && nrow(deg_T) > 0) {
+      
+      # Add to Excel workbook
+      addWorksheet(wb_deseq2, sheetName = i)
+      writeData(wb_deseq2, sheet = i, x = deg_T)
+      
+      # Create volcano plot
+      p <- EnhancedVolcano(
+        deg_T,
+        lab = deg_T$gene,
+        x = "avg_log2FC",
+        y = "p_val_adj",
+        selectLab = intersect(deg_T$gene, selected_genes),
+        pCutoff = 0.05,
+        FCcutoff = 0.5,
+        title = paste("DESeq2:", i),
+        subtitle = paste("Pseudobulk analysis -", group1, "vs", group2),
+        caption = paste("Total genes in plot:", nrow(deg_T)),
+        pointSize = 3.0,
+        labSize = 4.5,
+        drawConnectors = TRUE,
+        widthConnectors = 0.5,
+        colConnectors = "grey50",
+        legendPosition = "right",
+        legendLabSize = 12,
+        legendIconSize = 4.0,
+        col = c("grey30", "forestgreen", "royalblue", "red2"),
+        colAlpha = 0.7,
+        xlim = c(min(deg_T$avg_log2FC, na.rm = TRUE) - 0.5, 
+                 max(deg_T$avg_log2FC, na.rm = TRUE) + 0.5),
+        ylim = c(0, max(-log10(deg_T$p_val_adj), na.rm = TRUE) + 1),
+        gridlines.major = TRUE,
+        gridlines.minor = FALSE,
+        border = "full",
+        borderWidth = 1.0,
+        borderColour = "black"
+      )
+      
+      # Add custom theme
+      p <- p + 
+        theme_bw() +
+        theme(
+          plot.title = element_text(size = 14, face = "bold", hjust = 0.5),
+          plot.subtitle = element_text(size = 12, hjust = 0.5),
+          axis.title = element_text(size = 12, face = "bold"),
+          axis.text = element_text(size = 11),
+          legend.title = element_text(size = 12, face = "bold"),
+          legend.text = element_text(size = 11),
+          panel.grid.major = element_line(color = "grey90", size = 0.5),
+          panel.border = element_rect(color = "black", fill = NA, size = 1)
+        )
+      
+      # Display the plot
+      print(p)
+      
+      # Save to DESeq2 subfolder
+      ggsave(
+        filename = file.path(here("R Projects", "2907", "output", "visualisation", "enhanced_volcano", "deseq2"), 
+                            paste0(i, "_DESeq2_pseudobulk.svg")),
+        plot = p, width = 14, height = 10, dpi = 300, bg = "white"
+      )
+      
+      ggsave(
+        filename = file.path(here("R Projects", "2907", "output", "visualisation", "enhanced_volcano", "deseq2"), 
+                            paste0(i, "_DESeq2_pseudobulk.png")),
+        plot = p, width = 14, height = 10, dpi = 300, bg = "white"
+      )
+      
+      cat("✓ DESeq2 volcano plot created and saved for:", i, "\n")
+      cat("  - Genes in plot:", nrow(deg_T), "\n")
+      cat("  - Significant genes (FDR < 0.05):", sum(deg_T$p_val_adj < 0.05, na.rm = TRUE), "\n")
+      
+    } else {
+      cat("✗ No DESeq2 results generated for:", i, "\n")
+    }
+  }, error = function(e) {
+    cat("Error in DESeq2 analysis for", i, ":", e$message, "\n")
+  })
+}
+
+# Save DESeq2 Excel results
+saveWorkbook(wb_deseq2, here("R Projects", "2907", "output", "de_analysis", "Find Markers", "DE_DESeq2_pseudobulk_filtered.xlsx"), overwrite = TRUE)
+
+cat("\n" , rep("=", 60), "\n")
+cat("DESEQ2 VOLCANO PLOT GENERATION COMPLETED!\n")
+cat(rep("=", 60), "\n")
+cat("All DESeq2 plots saved to:", here("R Projects", "2907", "output", "visualisation", "enhanced_volcano", "deseq2"), "\n")
+```
+
+### edgeR - Empirical Methods for DE (Negative Binomial Distribution)
+
+```{r, cache=TRUE}
+# Create output directories for organized volcano plots
+dir.create(here("R Projects", "2907", "output", "visualisation", "enhanced_volcano"), recursive = TRUE, showWarnings = FALSE)
+dir.create(here("R Projects", "2907", "output", "visualisation", "enhanced_volcano", "edgeR"), recursive = TRUE, showWarnings = FALSE)
+
+# Define selected genes for labeling
+selected_genes <- c("S1pr1", "S1pr2", "S1pr3", "S1pr4", "S1pr5",
+                    "Ccr7", "Sell", "Cd69", "Klf2", "Cxcr4", "Cd44", "Itgae", "Itgal")
+
+# Define comparisons (reuse from previous chunk)
+pairwise_comparisons <- list(
+  "NAIVE_WB_vs_NAIVE_BM"     = c("Naive_WB", "Naive_BM"),
+  "NAIVE_WB_vs_SHAM_WB"      = c("Naive_WB", "Sham_WB"),
+  "NAIVE_WB_vs_SHAM_BM"      = c("Naive_WB", "Sham_BM"),
+  "NAIVE_WB_vs_UT_WB"        = c("Naive_WB", "UT_WB"),
+  "NAIVE_WB_vs_UT_BM"        = c("Naive_WB", "UT_BM"),
+  "NAIVE_BM_vs_SHAM_WB"      = c("Naive_BM", "Sham_WB"),
+  "NAIVE_BM_vs_SHAM_BM"      = c("Naive_BM", "Sham_BM"),
+  "NAIVE_BM_vs_UT_WB"        = c("Naive_BM", "UT_WB"),
+  "NAIVE_BM_vs_UT_BM"        = c("Naive_BM", "UT_BM"),
+  "SHAM_WB_vs_SHAM_BM"       = c("Sham_WB", "Sham_BM"),
+  "SHAM_WB_vs_UT_WB"         = c("Sham_WB", "UT_WB"),
+  "SHAM_WB_vs_UT_BM"         = c("Sham_WB", "UT_BM"),
+  "SHAM_BM_vs_UT_WB"         = c("Sham_BM", "UT_WB"),
+  "SHAM_BM_vs_UT_BM"         = c("Sham_BM", "UT_BM"),
+  "UT_WB_vs_UT_BM"           = c("UT_WB", "UT_BM")
+)
+
+# Initialize Excel workbook for edgeR results
+wb_edgeR <- createWorkbook()
+
+# Run edgeR analysis and generate volcano plots for each comparison
+for (i in names(pairwise_comparisons)) {
+  
+  group1 <- pairwise_comparisons[[i]][1]
+  group2 <- pairwise_comparisons[[i]][2]
+  
+  cat("\n", rep("=", 50), "\n")
+  cat("Processing edgeR:", i, "\n")
+  cat(rep("=", 50), "\n")
+  
+  # Check if both groups exist
+  available_groups <- unique(sample_info$group)
+  if (!group1 %in% available_groups || !group2 %in% available_groups) {
+    cat("Skipping", i, "- one or both groups not found in data\n")
+    cat("Available groups:", paste(available_groups, collapse = ", "), "\n")
+    next
+  }
+  
+  # Run edgeR analysis for this comparison
+  tryCatch({
+    deg_T <- run_edgeR_comparison(pseudobulk_counts, sample_info, group1, group2, i)
+    
+    if (!is.null(deg_T) && nrow(deg_T) > 0) {
+      
+      # Add to Excel workbook
+      addWorksheet(wb_edgeR, sheetName = i)
+      writeData(wb_edgeR, sheet = i, x = deg_T)
+      
+      # Create volcano plot
+      p <- EnhancedVolcano(
+        deg_T,
+        lab = deg_T$gene,
+        x = "avg_log2FC",           # Using renamed column from edgeR results
+        y = "p_val_adj",            # Using renamed column from edgeR results
+        selectLab = intersect(deg_T$gene, selected_genes),
+        pCutoff = 0.05,
+        FCcutoff = 0.5,             # Slightly higher FC cutoff for pseudobulk data
+        title = paste("edgeR:", i),
+        subtitle = paste("Pseudobulk analysis -", group1, "vs", group2),
+        caption = paste("Total genes in plot:", nrow(deg_T)),
+        pointSize = 3.0,
+        labSize = 4.5,
+        drawConnectors = TRUE,
+        widthConnectors = 0.5,
+        colConnectors = "grey50",
+        legendPosition = "right",
+        legendLabSize = 12,
+        legendIconSize = 4.0,
+        # Color scheme
+        col = c("grey30", "forestgreen", "royalblue", "red2"),
+        colAlpha = 0.7,              # Only specify colAlpha once
+        # Axis limits
+        xlim = c(min(deg_T$avg_log2FC, na.rm = TRUE) - 0.5, 
+                 max(deg_T$avg_log2FC, na.rm = TRUE) + 0.5),
+        ylim = c(0, max(-log10(deg_T$p_val_adj), na.rm = TRUE) + 1),
+        # Grid and theme
+        gridlines.major = TRUE,
+        gridlines.minor = FALSE,
+        border = "full",
+        borderWidth = 1.0,
+        borderColour = "black"
+      )
+      
+      # Add custom theme elements
+      p <- p + 
+        theme_bw() +
+        theme(
+          plot.title = element_text(size = 14, face = "bold", hjust = 0.5),
+          plot.subtitle = element_text(size = 12, hjust = 0.5),
+          axis.title = element_text(size = 12, face = "bold"),
+          axis.text = element_text(size = 11),
+          legend.title = element_text(size = 12, face = "bold"),
+          legend.text = element_text(size = 11),
+          panel.grid.major = element_line(color = "grey90", size = 0.5),
+          panel.border = element_rect(color = "black", fill = NA, size = 1)
+        )
+      
+      # Display the plot
+      print(p)
+      
+      # Save the plot to edgeR subfolder
+      ggsave(
+        filename = file.path(here("R Projects", "2907", "output", "visualisation", "enhanced_volcano", "edgeR"), 
+                            paste0(i, "_edgeR_pseudobulk.svg")),
+        plot = p,
+        width = 14,
+        height = 10,
+        dpi = 300,
+        bg = "white"
+      )
+      
+      # Also save as PNG for backup
+      ggsave(
+        filename = file.path(here("R Projects", "2907", "output", "visualisation", "enhanced_volcano", "edgeR"), 
+                            paste0(i, "_edgeR_pseudobulk.png")),
+        plot = p,
+        width = 14,
+        height = 10,
+        dpi = 300,
+        bg = "white"
+      )
+      
+      cat("✓ Volcano plot created and saved for:", i, "\n")
+      cat("  - Genes in plot:", nrow(deg_T), "\n")
+      cat("  - Significant genes (FDR < 0.05):", sum(deg_T$p_val_adj < 0.05, na.rm = TRUE), "\n")
+      cat("  - Upregulated (FC > 0.5, FDR < 0.05):", 
+          sum(deg_T$avg_log2FC > 0.5 & deg_T$p_val_adj < 0.05, na.rm = TRUE), "\n")
+      cat("  - Downregulated (FC < -0.5, FDR < 0.05):", 
+          sum(deg_T$avg_log2FC < -0.5 & deg_T$p_val_adj < 0.05, na.rm = TRUE), "\n")
+      
+    } else {
+      cat("✗ No results generated for:", i, "\n")
+      cat("  This may be due to insufficient samples or no detected expression\n")
+    }
+  }, error = function(e) {
+    cat("Error in edgeR analysis for", i, ":", e$message, "\n")
+  })
+}
+
+# Save edgeR Excel results
+saveWorkbook(wb_edgeR, here("R Projects", "2907", "output", "de_analysis", "Find Markers", "DE_edgeR_pseudobulk_filtered.xlsx"), overwrite = TRUE)
+
+cat("\n" , rep("=", 60), "\n")
+cat("EDGER VOLCANO PLOT GENERATION COMPLETED!\n")
+cat(rep("=", 60), "\n")
+cat("All plots saved to:", here("R Projects", "2907", "output", "visualisation", "enhanced_volcano", "edgeR"), "\n")
+cat("File formats: SVG (vector) and PNG (raster)\n")
+```
+
+### Student's T Test
+
+```{r, eval=FALSE}
+# Define the gene list you want to focus on
+selected_genes <- c("S1pr1", "S1pr2", "S1pr3", "S1pr4", "S1pr5", 
+                    "Ccr7", "Sell", "Cd69", "Klf2", "Cxcr4", "Cd44", "Itgae", "Itgal")
+
+pairwise_comparisons <- list(
+  "NAIVE_WB_vs_NAIVE_BM"     = c("Naive_WB", "Naive_BM"),
+  "NAIVE_WB_vs_SHAM_WB"      = c("Naive_WB", "Sham_WB"),
+  "NAIVE_WB_vs_SHAM_BM"      = c("Naive_WB", "Sham_BM"),
+  "NAIVE_WB_vs_UT_WB"        = c("Naive_WB", "UT_WB"),
+  "NAIVE_WB_vs_UT_BM"        = c("Naive_WB", "UT_BM"),
+  "NAIVE_BM_vs_SHAM_WB"      = c("Naive_BM", "Sham_WB"),
+  "NAIVE_BM_vs_SHAM_BM"      = c("Naive_BM", "Sham_BM"),
+  "NAIVE_BM_vs_UT_WB"        = c("Naive_BM", "UT_WB"),
+  "NAIVE_BM_vs_UT_BM"        = c("Naive_BM", "UT_BM"),
+  "SHAM_WB_vs_SHAM_BM"       = c("Sham_WB", "Sham_BM"),
+  "SHAM_WB_vs_UT_WB"         = c("Sham_WB", "UT_WB"),
+  "SHAM_WB_vs_UT_BM"         = c("Sham_WB", "UT_BM"),
+  "SHAM_BM_vs_UT_WB"         = c("Sham_BM", "UT_WB"),
+  "SHAM_BM_vs_UT_BM"         = c("Sham_BM", "UT_BM"),
+  "UT_WB_vs_UT_BM"           = c("UT_WB", "UT_BM")
+)
+
+# Create an Excel workbook
+wb <- createWorkbook()
+
+for (i in names(pairwise_comparisons)) {
+  
+  deg_T <- FindMarkers(
+    seu_T,
+    group.by = "sample_name",
+    ident.1 = pairwise_comparisons[[i]][1],
+    ident.2 = pairwise_comparisons[[i]][2],
+    test.use = "t"
+  )
+  
+  addWorksheet(wb, sheetName = i)
+  
+  # Filter for selected genes and sort by log2FC
+  deg_T <- deg_T %>%
+    filter(rownames(.) %in% selected_genes) %>%
+    arrange(-avg_log2FC)
+  
+  # Add gene names as a column and reorder
+  deg_T$gene <- rownames(deg_T)
+  deg_T <- deg_T %>% dplyr::select(gene, dplyr::everything())
+  
+  # Write to Excel sheet
+  writeData(wb, sheet = i, x = deg_T)
+}
+
+# Save the workbook
+saveWorkbook(
+  wb,
+  here("R Projects", "2907", "output", "de_analysis", "Find Markers", "DE_t_filtered.xlsx"),
+  overwrite = TRUE
+)
+```
 
 # Receptor Localistion & Surface vs Total Expression
-
-
 
 # Ligand–Receptor Interaction Analysis
 
 # Trajectory Analysis/Pseudotime
+
 ```{r, cache=TRUE, eval=FALSE}
 cds <- as.cell_data_set(seu_NKT_focused)
 cds <- preprocess_cds(cds, num_dim = 50)
@@ -213,31 +984,55 @@ plot_cells(cds, color_cells_by = "pseudotime")
 
 ```
 
-
-# Vis
+# Visualisation
 
 ## Dittoplot
+
+### Dittoplot Vln Plot
 
 ```{r}
 dittoPlot(seu_T, "S1pr1", group.by = "treatment", split.by = "tissue")
 ```
 
+### Ditto Plot - Box Plot
+
 ```{r}
 dittoBoxPlot(seu_T, "S1pr1", group.by = "treatment", split.by = "tissue")
 ```
+
+### Ditto Plot - Ridge Plot
+
 ```{r}
 dittoRidgePlot(seu_T, "S1pr1", group.by = "treatment", split.by = "tissue")
 ```
 
 ## Enhanced Volcano Plots
 
+## Deseq
+
+See under DE results
+
+## Edge R
+
+See under DE results
+
+## MAST
+
+see under DE results
+
 ## Nebulosa
-## Seurat T Cluster
+
+### Seurat T Cluster
+
 ```{r}
 Nebulosa::plot_density(seu_T, "S1pr1") + 
     facet_wrap(.~seu_T$sample_name, ncol = 3) + theme_void()
+Nebulosa::plot_density(seu_T, "S1pr2") + 
+    facet_wrap(.~seu_T$sample_name, ncol = 3) + theme_void()
+Nebulosa::plot_density(seu_T, "S1pr3") + 
+    facet_wrap(.~seu_T$sample_name, ncol = 3) + theme_void()
+Nebulosa::plot_density(seu_T, "S1pr4") + 
+    facet_wrap(.~seu_T$sample_name, ncol = 3) + theme_void()
+Nebulosa::plot_density(seu_T, "S1pr5") + 
+    facet_wrap(.~seu_T$sample_name, ncol = 3) + theme_void()
 ```
-
-
-
-
