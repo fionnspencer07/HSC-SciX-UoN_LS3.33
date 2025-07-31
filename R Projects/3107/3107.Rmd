@@ -1,0 +1,338 @@
+---
+title: "R Notebook"
+output: 
+  html_document:
+    toc: true
+    toc_depth: 6
+    toc_float: true
+    code_folding: hide
+    keep_md: true
+    number_sections: true
+---
+
+```{r}
+library(here) 
+
+# Set global knitr chunk options
+knitr::opts_chunk$set(
+    error     = TRUE,        # Ensures that error messages are being shown in the output
+    fig.align = "center",    # Ensures that all figures are aligned to the centre in the output
+    message   = TRUE,       # <--- Recommend FALSE for cleaner reports, set to TRUE for development
+    warning   = TRUE,       # <--- Recommend FALSE for cleaner reports, set to TRUE for development
+    autodep   = TRUE,        # Automatically detects dependencies for caching
+    cache     = TRUE,        # <--- IMPORTANT: Enable caching globally here!
+    results   = "markup",    # Displays the output as normal formatted text
+    echo      = TRUE,        # Ensures that the R code itself is displayed in the document
+    dev       = "svg",       # Graphics output will be in Scalable Vector Graphics (SVG) format
+    out.width = "90%",       # Sets the width of the output image or plot to 90% of the available width 
+    out.extra = "keepaspectratio=true" # Adds extra options to the output, preserving aspect ratio
+)
+```
+
+```{r}
+library(here)
+```
+
+# Set Up Working Environment
+
+## Set Seed
+
+```{r}
+seed <- "210825"
+set.seed(seed)
+message("seed has been set to 210825 ")
+```
+
+## Load Packages & Functions
+
+```{r}
+source(here("Custom R Functions and Scripts", "init_packages.R"))
+```
+
+## Parallelisation
+
+```{r}
+# Set up parallel processing for CellChat or other parallelized tasks
+library(future)
+plan("multisession", workers = 10)
+options(future.globals.maxSize = 10240 * 1024^2)  # 10 GB memory cap
+
+```
+
+## Configuration
+
+### Custom Colours
+
+```{r}
+# Custom colors
+man_cols <- c("#86b0cc",  "#f3e65d", "#d5c1e7", "#eeb84c", "#82c39e", "#525252","#4d9f6b", "#b3939e", "#e76031", "#e9944b")
+names(man_cols) <- c("B_cells", "NK_cells", "monocytes", "T_cells", "neutrophils", "megakaryocytes", "pDCs",
+                     "plasma_cells", "progenitor_cells", "NKT_cells")
+```
+
+## Output Folders
+
+### Primary
+
+```{r}
+dir.create(here("R Projects", "2907", "output"), recursive = TRUE, showWarnings = FALSE)
+```
+
+### DGE
+
+```{r}
+dir.create(here("R Projects", "2907", "output", "de_analysis", "Find Markers"), recursive = TRUE, showWarnings = FALSE)
+dir.create(here("R Projects", "2907", "output", "de_analysis", "Presto"), recursive = TRUE, showWarnings = FALSE)
+dir.create(here("R Projects", "2907", "output", "de_analysis", "t.test"), recursive = TRUE, showWarnings = FALSE)
+```
+
+### Visualisation
+
+```{r}
+dir.create(here("R Projects", "2907", "output", "visualisation", "box plots"), recursive = TRUE, showWarnings = FALSE)
+dir.create(here("R Projects", "2907", "output", "visualisation", "complex heatmaps"), recursive = TRUE, showWarnings = FALSE)
+dir.create(here("R Projects", "2907", "output", "visualisation", "nebulosa"), recursive = TRUE, showWarnings = FALSE)
+dir.create(here("R Projects", "2907", "output", "visualisation", "violin plots"), recursive = TRUE, showWarnings = FALSE)
+dir.create(here("R Projects", "2907", "output", "visualisation", "volcano"), recursive = TRUE, showWarnings = FALSE)
+```
+
+## Import & Pre-processing of Data
+
+### Load RDS file
+
+#### Load Original RDS
+
+Importing PhD Clara Savary's RDS & Initialising the object as a Seurat Object
+
+```{r, eval=FALSE}
+
+seu <- readRDS(here("Data",          "seu_NKT_blood_mouse_PPK_ONC_harmony_integrated_filtered_v2_20231_20236_annot.rds"))
+```
+
+#### Subset
+
+Initial Subset to isolate T Cells, Natural Killer T Cells and Natural Killer Cells and label
+
+```{r, eval=FALSE}
+seu_NKT <- subset(seu, subset = cell_types %in% c("T_cells", "NK_cells", "NKT_cells"))
+```
+
+#### Subset Dataset Again
+
+Second Subset -\> subsetting to remove treatment conditions involving theraputics as this is outside the bounds of the scope of the investigation.
+
+Including:
+
+-   DMG Mice (represented as untreated or UT)
+
+-   Control: No Cancer (Treatment and Disease Naive Group)
+
+-   Surgery Control (SHAM - Injected with Saline - to make sure that the stress of surgery isn't a factor and can be compared between Naive, UT and Sham)
+
+Excluding:
+
+-   ONC201 - Dordaviprone -\> DRD2 antagonist and ClpP agonist
+
+    -   <https://doi.org/10.1158/0008-5472.CAN-23-0186>
+
+    -   <https://doi.org/10.1158/2159-8290.CD-23-0131>
+
+-   Dex - Dexmethasone -\> Corticosteroid
+
+-   Dex & ONC201 Combo
+
+```{r, eval=FALSE}
+seu_NKT_focused <- subset(seu_NKT, subset = treatment %in% c("UT", "NAIVE", "SHAM"))
+```
+
+For later scripting - load seu_NKT_focused
+
+#### Export
+
+Use either base or BioCgenerics
+
+##### BioCgenerics
+
+```{r,eval=FALSE}
+BiocGenerics::saveRDS(seu_NKT_focused, file = here("Data", "seu_NKT_focused.rds"))
+```
+
+OR
+
+##### Base
+
+```{r, , eval=FALSE}
+base::saveRDS(seu_NKT_focused, file = here("Data", "seu_NKT_focused.rds") )
+```
+
+#### Load rds
+
+```{r, cache=FALSE}
+seu_NKT_focused <- readRDS(here("Data", "seu_NKT_focused.rds"))
+```
+
+### T Cell Subset
+
+```{r, cache=FALSE}
+seu_T <- subset(seu_NKT_focused, subset = T_clusters %in% "T_cells")
+```
+
+# QC
+
+Already completed by PhD CS
+
+# Cell Type Annotation
+
+```{r, cache.lazy=FALSE}
+# UMAP plot showing cluster identities
+p_ident <- DimPlot(
+  seu_NKT_focused,
+  label     = TRUE,
+  repel     = TRUE,
+  group.by  = "T_clusters",
+  reduction = "umap_harmony_SCT"
+) + NoLegend()
+
+# Display the plot
+print(p_ident)
+```
+
+```{r, cache.lazy=FALSE}
+# Extract RNA assay data to use as SingleR test input
+expression <- GetAssayData(seu_NKT_focused[["RNA"]], layer = "data")
+
+# Use tree-based cluster identities for annotation
+cluster_info <- seu_NKT_focused@meta.data$T_clusters
+
+# Load reference atlases for annotation
+atlas_set <- list(
+  "MRD"    = celldex::MouseRNAseqData(),
+  "DICED"  = celldex::DatabaseImmuneCellExpressionData(),
+  "IMMGEN" = celldex::ImmGenData()
+)
+
+# Loop over each reference set and label level
+sapply(names(atlas_set), function(x) {
+  
+  for (label in c("label.main", "label.fine")) {
+    
+    # Run SingleR on clustered data
+    prediction <- SingleR(
+      test     = expression,
+      ref      = atlas_set[[x]],
+      labels   = atlas_set[[x]][[label]],
+      clusters = cluster_info
+    )
+
+    # Plot annotation scores as a heatmap
+    p_singleR <- plotScoreHeatmap(prediction, show_colnames = TRUE) %>% as.ggplot()
+
+    # Display UMAP and annotation heatmap side-by-side
+    p <- grid.arrange(grobs = list(p_ident, p_singleR), ncol = 2)
+    p
+    
+  }
+  
+})
+
+```
+
+# Dim Reduction & Clustering
+
+Clara already created Dim Plots defined in her Seurat Object - all we have to do now is run them if we need to make more (we don't) we can
+
+```{r}
+# RNA Assay ====
+## PCA ====
+DimPlot(seu_NKT_focused, reduction = "pca_RNA")
+## UMAP ====
+DimPlot(seu_NKT_focused, reduction = "umap_RNA")
+## TSNE ====
+DimPlot(seu_NKT_focused, reduction = "tsne_RNA")
+# PCA
+DimPlot(seu_NKT_focused, reduction = "pca")
+# SCT - SC Transform (Normalisation Technique) Assay ====
+## UMAP SCT ====
+DimPlot(seu_NKT_focused, reduction = "umap_SCT")
+## Harmony SCT ====
+DimPlot(seu_NKT_focused, reduction = "harmony_SCT")
+## UMAP Harmony SCT ====
+DimPlot(seu_NKT_focused, reduction = "umap_harmony_SCT")
+```
+
+# Differential Expression Analysis
+
+MAST, Find Markers, Presto and deseq2/edgeR
+
+# T Clusters
+
+Using the Seu_T Seurat Object to exclude NKT, NK Cells
+
+## Presto
+
+### Wilcoxon
+
+### Deseq2 & EdgeR
+#### deseq2
+### edgeR - Empirical Methods for DE (Negative Binomial Distribution)
+
+# Gene Set Enrichment Analysis
+
+# Receptor Localistion & Surface vs Total Expression 
+
+# Ligand–Receptor Interaction Analysis 
+
+# Trajectory Analysis/Pseudotime
+
+# Visualisation
+
+## Dittoplot
+
+### Dittoplot Vln Plot
+
+```{r}
+dittoPlot(seu_T, "S1pr1", group.by = "treatment", split.by = "tissue")
+```
+
+### Ditto Plot - Box Plot
+
+```{r}
+dittoBoxPlot(seu_T, "S1pr1", group.by = "treatment", split.by = "tissue")
+```
+
+### Ditto Plot - Ridge Plot
+
+```{r}
+dittoRidgePlot(seu_T, "S1pr1", group.by = "treatment", split.by = "tissue")
+```
+
+## Enhanced Volcano Plots
+
+## Deseq
+
+See under DE results
+
+## Edge R
+
+See under DE results
+
+## MAST
+
+see under DE results
+
+## Nebulosa
+
+### Seurat T Cluster
+
+```{r}
+Nebulosa::plot_density(seu_T, "S1pr1") + 
+    facet_wrap(.~seu_T$sample_name, ncol = 3) + theme_void()
+Nebulosa::plot_density(seu_T, "S1pr2") + 
+    facet_wrap(.~seu_T$sample_name, ncol = 3) + theme_void()
+Nebulosa::plot_density(seu_T, "S1pr3") + 
+    facet_wrap(.~seu_T$sample_name, ncol = 3) + theme_void()
+Nebulosa::plot_density(seu_T, "S1pr4") + 
+    facet_wrap(.~seu_T$sample_name, ncol = 3) + theme_void()
+Nebulosa::plot_density(seu_T, "S1pr5") + 
+    facet_wrap(.~seu_T$sample_name, ncol = 3) + theme_void()
+```
