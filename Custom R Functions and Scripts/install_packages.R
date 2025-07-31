@@ -72,3 +72,4 @@ remotes::install_github('satijalab/seurat-wrappers')
 
 # Seurat (CRAN)
 install.packages("Seurat", dependencies = TRUE)
+install.packages("msigdbr", dependencies = TRUE)
